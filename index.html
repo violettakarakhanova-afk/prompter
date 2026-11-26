@@ -1,0 +1,791 @@
+<!doctype html><html lang="hr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#000000"><meta name="mobile-web-app-capable" content="yes"><meta name="robots" content="noindex,nofollow"><link rel="manifest" href="manifest.json"><link rel="icon" href="ikona-192.png"><link rel="apple-touch-icon" href="ikona-192.png"></head><body>
+<title>Moj prompter</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout: jedan stupac postavki (studijska konzola) + preko cijelog ekrana pozornica za čitanje */
+:root{
+  color-scheme: dark;
+  --bg:#0e1013; --panel:#171a1f; --line:#272c34; --fg:#eef0f3; --muted:#8c94a1;
+  --accent:#ffb627; --accent-ink:#1d1400; --danger:#ff7a6b;
+  --st-black:#000000; --st-white:#ffffff; --st-yellow:#ffe14d; --st-paper:#f4f4f0; --st-ink:#111111; --st-cue-dark:#7a5a00;
+  --f-display:"Space Grotesk", "Inter", system-ui, sans-serif;
+  --f-ui:"Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-read:"Atkinson Hyperlegible", "Inter", system-ui, sans-serif;
+}
+html,body{height:100%}
+[hidden]{display:none !important}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-ui);font-size:15px;line-height:1.5}
+*{box-sizing:border-box}
+button,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------- Urednik ---------- */
+.wrap{max-width:720px;margin:0 auto;padding-block:20px 120px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));
+  display:flex;flex-direction:column;gap:22px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+h1{font-family:var(--f-display);font-size:26px;letter-spacing:-.01em;margin:0;display:flex;align-items:center;gap:10px}
+.tally{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+.est{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums;text-align:right}
+h2{font-family:var(--f-display);font-size:13px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:0 0 10px;font-weight:500}
+textarea{width:100%;min-height:42vh;resize:vertical;background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:14px;font-family:var(--f-read);font-size:17px;line-height:1.55}
+.row-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.hint{color:var(--muted);font-size:13px;margin:8px 0 0}
+.hint code{background:var(--panel);border:1px solid var(--line);padding:0 5px;border-radius:4px;color:var(--accent);font-family:var(--f-ui)}
+.btn{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer}
+.btn:active{transform:translateY(1px)}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:8px 14px;cursor:pointer;font-weight:500;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip.cur{border-color:var(--accent);color:var(--accent)}
+.chip.add{border-style:dashed;color:var(--muted);background:transparent}
+.namerow{display:flex;gap:8px;margin-top:10px}
+.namerow input{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+.danger{color:var(--danger);flex:none}
+.danger.armed{background:var(--danger);color:var(--bg);border-color:var(--danger)}
+#texts + .namerow{margin-bottom:10px}
+
+.settings{display:flex;flex-direction:column;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 14px}
+.set{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.set:last-child{border-bottom:0}
+.set label{font-weight:500}
+.set output{font-variant-numeric:tabular-nums;color:var(--accent);font-weight:600}
+.set input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--accent);height:28px}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer}
+.toggle small{display:block;color:var(--muted);font-weight:400}
+.toggle input{appearance:none;width:46px;height:28px;border-radius:14px;background:var(--line);position:relative;flex:none;cursor:pointer;transition:background .15s}
+.toggle input::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--fg);transition:transform .15s}
+.toggle input:checked{background:var(--accent)}
+.toggle input:checked::after{transform:translateX(18px);background:var(--accent-ink)}
+.seg{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}
+.seg label{flex:1 1 0;min-width:80px;text-align:center;border:1px solid var(--line);border-radius:8px;padding:8px 6px;cursor:pointer;font-weight:500}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label:has(input:checked){border-color:var(--accent);color:var(--accent)}
+.seg label:has(input:focus-visible){outline:2px solid var(--accent)}
+
+.preview{border-radius:10px;padding:14px 16px;overflow:hidden;font-family:var(--f-read);border:1px solid var(--line);max-height:180px}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px;color:var(--muted)}
+.keys b{color:var(--fg);font-weight:600}
+
+.go{position:fixed;left:0;right:0;bottom:0;z-index:5;
+  padding:14px max(16px, env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  background:linear-gradient(to top, var(--bg) 60%, transparent)}
+.go button{display:block;width:100%;max-width:720px;margin:0 auto;background:var(--accent);color:var(--accent-ink);border:0;border-radius:12px;
+  padding:16px;font-family:var(--f-display);font-size:19px;font-weight:700;cursor:pointer;letter-spacing:.01em}
+
+/* ---------- Pozornica (čitanje) ---------- */
+#stage{position:fixed;inset:0;z-index:20;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;
+  background:var(--p-bg);color:var(--p-fg)}
+#stage.t-white{--p-bg:var(--st-black);--p-fg:var(--st-white);--p-cue:var(--accent)}
+#stage.t-yellow{--p-bg:var(--st-black);--p-fg:var(--st-yellow);--p-cue:var(--st-white)}
+#stage.t-paper{--p-bg:var(--st-paper);--p-fg:var(--st-ink);--p-cue:var(--st-cue-dark)}
+#mirror{position:absolute;inset:0}
+#scroller{position:absolute;left:0;right:0;top:0;will-change:transform}
+#text{font-family:var(--f-read);font-weight:400;font-size:var(--p-size);line-height:var(--p-lh);
+  padding-left:max(var(--p-margin), env(safe-area-inset-left, 0px));padding-right:max(var(--p-margin), calc(38px + env(safe-area-inset-right, 0px)))}
+#text p{margin:0 0 .9em}
+#text .ln{margin:0}
+#text .gap{height:calc(1em * var(--p-lh))}
+#text .cue{color:var(--p-cue);font-weight:400;font-size:.62em}
+#text .w.said{opacity:.5}
+#text .w.now{text-decoration:underline;text-decoration-color:var(--accent);text-decoration-thickness:.08em;text-underline-offset:.14em}
+#text .em,.preview .em{font-weight:700;font-family:"Atkinson Hyperlegible", system-ui, -apple-system, sans-serif}
+/* traka za pomicanje desno: povuci palac gore/dolje do bilo kojeg dijela teksta */
+#scrub{position:absolute;right:max(2px, env(safe-area-inset-right, 0px));top:calc(130px + env(safe-area-inset-top, 0px));bottom:calc(170px + env(safe-area-inset-bottom, 0px));
+  width:34px;z-index:3;touch-action:none;cursor:pointer}
+#scrub .trk{position:absolute;left:50%;top:0;bottom:0;width:4px;margin-left:-2px;border-radius:2px;background:rgba(255,255,255,.18)}
+#scrub .tick{position:absolute;left:50%;width:14px;height:2px;margin-left:-7px;background:var(--accent);opacity:.7}
+#scrub .thumb{position:absolute;left:50%;width:14px;height:44px;margin:-22px 0 0 -7px;border-radius:7px;background:var(--accent);box-shadow:0 0 0 3px rgba(0,0,0,.5)}
+#stage.hide-ctl #scrub{opacity:.45}
+#vst{order:10;flex:0 1 auto;margin:0 auto;max-width:100%;font-size:13px;font-weight:600;color:var(--fg);background:rgba(30,33,39,.85);padding:6px 10px;border-radius:8px;text-align:center}
+#vst.bad{background:#7a1c14;color:#fff}
+.cb.mic.on{background:#c8322a;border-color:#c8322a;color:#fff}
+.ver{display:block;font-size:11px;color:var(--accent);margin-top:2px}
+/* oznaka dijela (HOOK, 1 · …) – manja, druga boja, ne čita se */
+#text .sec,.preview .sec{display:flex;align-items:center;gap:.6em;margin:.45em 0 .3em;color:var(--p-cue);font-family:var(--f-ui);font-weight:600;
+  font-size:max(13px, .36em);line-height:1.25;text-transform:uppercase;letter-spacing:.08em}
+#text .sec::before,#text .sec::after,.preview .sec::before,.preview .sec::after{content:"";flex:1 1 1.5em;border-top:2px solid var(--p-cue);opacity:.7}
+#text .sec::before,.preview .sec::before{flex:0 0 1.5em}
+#text .sec.first{margin-top:0}
+#dim{position:absolute;left:0;right:0;top:0;pointer-events:none;background:linear-gradient(to bottom, color-mix(in srgb, var(--p-bg) 72%, transparent) 70%, color-mix(in srgb, var(--p-bg) 30%, transparent))}
+.ctl.top .time{white-space:nowrap}
+#sec{order:9;flex:0 1 auto;margin:0 auto;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600;letter-spacing:.04em;color:var(--accent);
+  background:rgba(30,33,39,.8);padding:6px 10px;border-radius:8px}
+#readline{position:absolute;left:0;right:0;height:0;pointer-events:none}
+#readline::before,#readline::after{content:"";position:absolute;top:-11px;border:11px solid transparent}
+#readline::before{left:0;border-left:16px solid var(--accent)}
+#readline::after{right:0;border-right:16px solid var(--accent)}
+#readline span{position:absolute;left:18px;right:18px;top:0;border-top:1px dashed var(--accent);opacity:.35}
+#count{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--f-display);font-size:34vmin;font-weight:700;color:var(--accent);
+  background:color-mix(in srgb, var(--p-bg) 70%, transparent);pointer-events:none}
+#bar{position:absolute;left:0;top:0;height:3px;background:var(--accent);width:0}
+
+.ctl{position:absolute;left:0;right:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;transition:opacity .25s, transform .25s;
+  padding-left:max(12px, env(safe-area-inset-left, 0px));padding-right:max(12px, env(safe-area-inset-right, 0px));
+  color:var(--fg);font-family:var(--f-ui)}
+.ctl.top{top:0;padding-top:calc(10px + env(safe-area-inset-top, 0px));padding-bottom:22px;justify-content:space-between;
+  background:linear-gradient(to bottom, rgba(0,0,0,.75), transparent)}
+.ctl.bottom{bottom:0;padding-bottom:calc(12px + env(safe-area-inset-bottom, 0px));padding-top:26px;justify-content:center;
+  background:linear-gradient(to top, rgba(0,0,0,.85), transparent)}
+#stage.hide-ctl .ctl{opacity:0;pointer-events:none}
+#stage.hide-ctl .ctl.top{transform:translateY(-8px)}
+#stage.hide-ctl .ctl.bottom{transform:translateY(8px)}
+.cb{background:rgba(30,33,39,.92);border:1px solid rgba(255,255,255,.12);border-radius:10px;min-width:46px;height:46px;padding:0 12px;
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;font-weight:600;font-size:15px}
+.cb svg{width:20px;height:20px;fill:currentColor}
+.cb.play{background:var(--accent);color:var(--accent-ink);border:0;min-width:64px;height:58px;border-radius:29px}
+.cb.play svg{width:26px;height:26px}
+.cb.on{color:var(--accent);border-color:var(--accent)}
+.grp{display:inline-flex;align-items:center;gap:4px;background:rgba(30,33,39,.6);border-radius:12px;padding:3px}
+.grp .val{min-width:48px;text-align:center;font-variant-numeric:tabular-nums;font-size:13px;line-height:1.15}
+.grp .val small{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.08em}
+.time{font-variant-numeric:tabular-nums;font-size:14px;color:var(--fg);background:rgba(30,33,39,.8);padding:6px 10px;border-radius:8px}
+@media (prefers-reduced-motion: reduce){.ctl{transition:none}}
+</style>
+
+<div id="editor">
+  <div class="wrap">
+    <header>
+      <h1><span class="tally"></span>Moj prompter</h1>
+      <div class="est"><span id="est"></span><span class="ver">verzija 26.11. (14)</span></div>
+    </header>
+
+    <section>
+      <h2>Mape</h2>
+      <div class="chips" id="folders"></div>
+      <div class="namerow">
+        <input id="fname" type="text" aria-label="Ime mape" placeholder="Ime mape">
+        <button class="btn danger" id="fdel" type="button">Obriši mapu</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Tekstovi u ovoj mapi</h2>
+      <div class="chips" id="texts"></div>
+      <div class="namerow">
+        <input id="tname" type="text" aria-label="Ime teksta" placeholder="Ime teksta">
+        <button class="btn danger" id="tdel" type="button">Obriši tekst</button>
+      </div>
+      <textarea id="script" spellcheck="false" aria-label="Tekst za čitanje"></textarea>
+      <div class="row-btns">
+        <button class="btn" id="clear" type="button">Obriši tekst</button>
+        <button class="btn" id="sample" type="button">Vrati primjer</button>
+      </div>
+      <p class="hint">Svaki red = nova rečenica. Red koji počinje s <code>## </code> je oznaka dijela (npr. <code>## HOOK</code>) – na prompteru je crta s natpisom, ne čita se. Riječi u zvjezdicama <code>*ovako*</code> su podebljane. Napomene u uglatim zagradama <code>[pauza]</code> su manje i u drugoj boji. Tekst se sam sprema na ovom mobitelu.</p>
+    </section>
+
+    <section>
+      <h2>Postavke</h2>
+      <div class="settings">
+        <div class="set"><label for="speed">Brzina</label><output id="o-speed"></output>
+          <input type="range" id="speed" min="0.5" max="20" step="0.5"></div>
+        <div class="set"><label for="size">Veličina slova</label><output id="o-size"></output>
+          <input type="range" id="size" min="20" max="140" step="2"></div>
+        <div class="set"><label for="lh">Razmak između redova</label><output id="o-lh"></output>
+          <input type="range" id="lh" min="1" max="2.2" step="0.05"></div>
+        <div class="set"><label for="margin">Rubovi lijevo i desno</label><output id="o-margin"></output>
+          <input type="range" id="margin" min="0" max="30" step="1"></div>
+        <div class="set"><label for="linePos">Visina linije za čitanje</label><output id="o-linePos"></output>
+          <input type="range" id="linePos" min="10" max="70" step="1"></div>
+        <div class="set"><label for="countdown">Odbrojavanje prije početka</label><output id="o-countdown"></output>
+          <input type="range" id="countdown" min="0" max="10" step="1"></div>
+        <div class="set"><span>Boje</span><span></span>
+          <div class="seg" role="radiogroup" aria-label="Boje">
+            <label><input type="radio" name="theme" id="th-white" value="white">Bijelo na crnom</label>
+            <label><input type="radio" name="theme" id="th-yellow" value="yellow">Žuto na crnom</label>
+            <label><input type="radio" name="theme" id="th-paper" value="paper">Crno na bijelom</label>
+          </div></div>
+        <div class="set"><span>Poravnanje</span><span></span>
+          <div class="seg" role="radiogroup" aria-label="Poravnanje">
+            <label><input type="radio" name="align" id="al-left" value="left">Lijevo</label>
+            <label><input type="radio" name="align" id="al-center" value="center">Sredina</label>
+          </div></div>
+        <div class="set"><label class="toggle" style="grid-column:1/-1">
+          <span>Linija za čitanje<small>Strelice koje pokazuju gdje gledati</small></span><input type="checkbox" id="line"></label></div>
+        <div class="set"><label class="toggle" style="grid-column:1/-1">
+          <span>Zatamni pročitano<small>Tekst iznad linije je bljeđi, oko ostaje na sljedećoj rečenici</small></span><input type="checkbox" id="dimRead"></label></div>
+        <div class="set"><label class="toggle" style="grid-column:1/-1">
+          <span>Uspori kod nove teme<small>Oko žute crte tekst ide upola sporije – vrijeme za pauzu i pogled u kameru</small></span><input type="checkbox" id="slowSec"></label></div>
+        <div class="set"><label class="toggle" style="grid-column:1/-1">
+          <span>Zrcalo lijevo–desno<small>Za staklo profesionalnog promptera ispred kamere</small></span><input type="checkbox" id="mirrorX"></label></div>
+        <div class="set"><label class="toggle" style="grid-column:1/-1">
+          <span>Okreni naopako<small>Ako je mobitel u prompteru okrenut</small></span><input type="checkbox" id="mirrorY"></label></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Ovako će izgledati</h2>
+      <div class="preview" id="preview"><div class="sec">Hook</div>Dobar dan i dobro došli. <span class="em">Ovo je naglašeno.</span> <span class="cue">[osmijeh]</span></div>
+    </section>
+
+    <section>
+      <h2>Upravljanje dok čitaš</h2>
+      <div class="keys">
+        <b>Dodir ekrana</b><span>sakrij / pokaži gumbe (tekst ne staje)</span>
+        <b>Žuti gumb</b><span>kreni / stani</span>
+        <b>Mikrofon</b><span>tekst prati glas: ide dok govoriš, stane kad staneš (radi kad link otvoriš u Chromeu, ne u aplikaciji Claude). Ponovni dodir = isključi</span>
+        <b>Gumbi dolje</b><span>brzina (− / +, drži za brže mijenjanje), veličina slova i rubovi lijevo-desno, rade i dok tekst ide – ne zaustavljaju ga</span>
+        <b>Pribadača gore</b><span>uključena = gumbi stalno vidljivi; isključena = sakriju se nakon 2,5 s</span>
+        <b>Traka desno</b><span>povuci žuti palac gore ili dolje = skok bilo gdje u tekstu (crtice = početak dijelova)</span>
+        <b>Gore u sredini</b><span>naziv dijela koji upravo čitaš (HOOK, 1, 2 …)</span>
+        <b>Povlačenje prstom</b><span>ručno pomakni tekst gore ili dolje</span>
+        <b>Tipkovnica ili Bluetooth daljinski</b><span>razmak ili Enter = kreni/stani · strelica gore/dolje = sporije/brže · Page Up/Down = skok natrag/naprijed · Esc = izlaz</span>
+      </div>
+    </section>
+  </div>
+  <div class="go"><button id="start" type="button">Kreni čitati</button></div>
+</div>
+
+<div id="stage" hidden>
+  <div id="mirror">
+    <div id="scroller"><div id="text"></div></div>
+    <div id="dim"></div>
+    <div id="readline"><span></span></div>
+  </div>
+  <div id="bar"></div>
+  <div id="scrub" aria-label="Pomakni tekst"><div class="trk"></div><div id="ticks"></div><div class="thumb" id="thumb"></div></div>
+  <div id="count" hidden></div>
+
+  <div class="ctl top">
+    <button class="cb" id="exit" type="button" aria-label="Izlaz">
+      <svg viewBox="0 0 24 24"><path d="M15.4 5.4 14 4l-8 8 8 8 1.4-1.4L8.8 12z"/></svg>Tekst</button>
+    <span class="time" id="time">0:00</span>
+    <span style="order:8;flex-basis:100%;height:0"></span><span id="sec"></span><span id="vst" hidden></span>
+    <button class="cb" id="pin" type="button" aria-label="Gumbi stalno vidljivi" title="Gumbi stalno vidljivi">
+      <svg viewBox="0 0 24 24"><path d="M16 3v2h-1v6l3 3v2h-5v6l-1 1-1-1v-6H6v-2l3-3V5H8V3z"/></svg></button>
+    <button class="cb" id="fs" type="button" aria-label="Cijeli ekran" title="Cijeli ekran">
+      <svg viewBox="0 0 24 24" id="ic-fs"><path d="M4 4h6v2H6v4H4zm10 0h6v6h-2V6h-4zM4 14h2v4h4v2H4zm14 0h2v6h-6v-2h4z"/></svg>
+      <svg viewBox="0 0 24 24" id="ic-fsx" hidden><path d="M8 4h2v6H4V8h4zm6 0h2v4h4v2h-6zM4 14h6v6H8v-4H4zm10 0h6v2h-4v4h-2z"/></svg></button>
+    <button class="cb" id="mir" type="button" aria-label="Zrcalo">Zrcalo</button>
+  </div>
+
+  <div class="ctl bottom">
+    <button class="cb" id="top" type="button" aria-label="Na početak">
+      <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
+    <div class="grp">
+      <button class="cb" id="slower" type="button" aria-label="Sporije">−</button>
+      <span class="val"><span id="v-speed">5</span><small>brzina</small></span>
+      <button class="cb" id="faster" type="button" aria-label="Brže">+</button>
+    </div>
+    <button class="cb mic" id="mic" type="button" aria-label="Tekst prati glas">
+      <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11z"/></svg></button>
+    <button class="cb play" id="play" type="button" aria-label="Kreni ili stani">
+      <svg viewBox="0 0 24 24" id="ic-play"><path d="M8 5v14l11-7z"/></svg>
+      <svg viewBox="0 0 24 24" id="ic-pause" hidden><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg></button>
+    <div class="grp">
+      <button class="cb" id="smaller" type="button" aria-label="Manja slova">A−</button>
+      <span class="val"><span id="v-size">48</span><small>slova</small></span>
+      <button class="cb" id="bigger" type="button" aria-label="Veća slova">A+</button>
+    </div>
+    <div class="grp">
+      <button class="cb" id="narrower" type="button" aria-label="Uži rubovi">−</button>
+      <span class="val"><span id="v-margin">6</span><small>rubovi</small></span>
+      <button class="cb" id="wider" type="button" aria-label="Širi rubovi">+</button>
+    </div>
+  </div>
+</div>
+
+<script type="application/json" id="seed">{"v": "danijel-12-17-v4", "folder": {"id": "danijel-kontinuitet", "name": "Danijel · Kontinuitet 12–17"}, "texts": [{"id": "dp12", "name": "12 · Tko odlučuje o čemu", "body": "*Tko odlučuje o čemu?*\n*Zašto nejasna pravila odlučivanja mogu ugroziti i uspješno obiteljsko poduzeće?*\nZamislite obiteljsko poduzeće koje ostvaruje 40 milijuna eura prihoda.\nOsnivač se prije nekoliko godina formalno povukao iz uprave.\nNjegov sin danas je direktor.\nKći je također suvlasnica, ali ne sudjeluje u svakodnevnom poslovanju.\nPoduzeće dobro posluje.\nAli sada se pojavljuje važna poslovna odluka.\nSin želi investirati pet milijuna eura u novu proizvodnu liniju.\nVjeruje da je to nužno kako bi poduzeće ostalo konkurentno.\nOtac smatra da je investicija prerizična.\nKći smatra da bi dio raspoloživog novca trebalo isplatiti vlasnicima.\nI sada dolazimo do problema.\nSin kaže: „Ja sam direktor. Moja je odgovornost voditi poduzeće.”\nOtac odgovara: „Ja sam ovo poduzeće izgradio. Znam što je najbolje za njega.”\nA kći kaže: „I ja sam vlasnica. Zašto se mene ništa ne pita?”\n*Troje ljudi. Tri legitimne perspektive. Ali samo jedna odluka.*\nTko zapravo ima pravo odlučiti?\nI još važnije: prema kojim pravilima?\n\n## 1 · Najveći problem nije uvijek neslaganje\nU obiteljskim poduzećima često se pretpostavlja da problem nastaje kada se članovi obitelji ne slažu.\nAli neslaganje samo po sebi nije problem.\nDva vlasnika mogu imati potpuno različita mišljenja o budućnosti poduzeća.\nJedan može zagovarati rast.\nDrugi stabilnost.\nTreći prodaju.\nI sve tri perspektive mogu imati svoju logiku.\nProblem nastaje kada obitelj nema dogovoreno kako će se između tih različitih mišljenja donijeti odluka.\nTada svako neslaganje postaje osobno.\nJer ako ne postoje jasna pravila, ljudi se počinju oslanjati na nešto drugo.\nNa godine iskustva.\nNa obiteljski autoritet.\nNa vlasnički postotak.\nNa činjenicu tko je više pridonio razvoju poduzeća.\nIli na pitanje tko je kome što obećao.\n*Kada ne postoje jasna pravila odlučivanja, svaka važna odluka može postati borba za autoritet.*\nZato kvalitetno upravljanje ne znači da se svi moraju slagati.\nZnači da se odluke mogu donositi i kada se ljudi ne slažu.\n## 2 · Tri uloge koje obitelji često miješaju\nU obiteljskom poduzeću postoje tri različite uloge.\nPrva je uloga člana obitelji.\nDruga je uloga vlasnika.\nTreća je uloga osobe koja upravlja poduzećem.\nProblem nastaje kada se te uloge počnu preklapati.\nZamislite oca koji je osnovao poduzeće.\nOn je istodobno bio vlasnik, direktor i glava obitelji.\nGodinama je donosio gotovo sve važne odluke.\nKoga zaposliti.\nU što investirati.\nKoliko dobiti isplatiti.\nKome dati veću odgovornost.\nDok je jedna osoba imala sve te uloge, sustav je možda funkcionirao.\nAli sada vlasništvo prelazi na više članova obitelji.\nUpravljanje preuzima sljedeća generacija.\nMožda dolaze i profesionalni menadžeri.\nI odjednom više nije jasno tko ima pravo odlučiti o čemu.\n*Obiteljski autoritet nije isto što i vlasnička ovlast. A vlasnička ovlast nije isto što i upravljačka odgovornost.*\nTo je razlika koju svaka obitelj mora razumjeti ako želi dugoročno očuvati kontinuitet.\n## 3 · Vlasnik ne bi trebao odlučivati o svemu\nPostoji jedna česta zabluda.\nAko sam vlasnik poduzeća, mogu odlučivati o svemu.\nAli zamislite što bi se dogodilo kada bi svaki vlasnik imao pravo izravno intervenirati u svakodnevno poslovanje.\nJedan vlasnik daje upute direktoru prodaje.\nDrugi razgovara s voditeljem proizvodnje i mijenja planove.\nTreći traži od financijskog direktora da zaustavi određeno plaćanje.\nA uprava je formalno odgovorna za poslovne rezultate.\nKako uprava može odgovarati za rezultate ako nema stvarne ovlasti donositi odluke?\n*Ne možete nekoga držati odgovornim za rezultat, a istodobno mu oduzeti pravo da donosi odluke potrebne za taj rezultat.*\nVlasnici imaju važnu ulogu.\nOni, u skladu sa svojim pravima i pravilima društva, odlučuju o pitanjima koja pripadaju vlasničkoj razini.\nSudjeluju u određivanju strateških očekivanja.\nOdlučuju o imenovanjima i drugim pitanjima iz svoje nadležnosti.\nPostavljaju okvir u kojem se upravlja poduzećem.\nAli svakodnevno poslovanje treba voditi uprava.\nI uprava za to treba imati odgovarajuće ovlasti.\n## 4 · Ali ni direktor ne može odlučivati o svemu\nS druge strane, postoji i suprotna krajnost.\nDirektor smatra da je, zato što vodi poduzeće, svaka odluka isključivo njegova.\nAli nije svaka poslovna odluka samo operativno pitanje.\nZamislite da direktor želi kupiti konkurentsko poduzeće.\nIli se zadužiti za iznos koji značajno mijenja financijski rizik.\nIli prodati najvažniju nekretninu.\nIli potpuno promijeniti poslovni model.\nTakve odluke mogu imati posljedice za vlasnike koje nadilaze svakodnevno upravljanje.\nZato je važno unaprijed definirati koje odluke uprava može donositi samostalno, a za koje je potrebna odgovarajuća suglasnost ili odluka nadležnog tijela.\n*Autonomija uprave ne znači neograničenu moć.*\nZnači jasno definirane ovlasti unutar kojih uprava može samostalno djelovati.\nA kada odluka izlazi iz tih granica, postoji unaprijed poznat način njezina odobravanja.\nTakav sustav ne mora usporavati poslovanje.\nNaprotiv.\nMože ga značajno ubrzati.\nJer svi unaprijed znaju što mogu odlučiti, a što trebaju predložiti drugima.\n## 5 · Najopasnija situacija: formalni direktor i neformalni centar moći\nSada dolazimo do situacije koju često vidimo u generacijskim tranzicijama.\nOsnivač se formalno povukao.\nNjegov sin ili kći postali su direktori.\nAli zaposlenici i dalje znaju da je osnivač osoba koja ima posljednju riječ.\nAko se ne slažu s odlukom novog direktora, odlaze osnivaču.\nAko žele dobiti odobrenje za nešto što uprava ne podržava, razgovaraju s osnivačem.\nAko postoji konflikt, čekaju da ga osnivač riješi.\nI što se tada događa?\nFormalno postoji nova uprava.\nAli stvarni sustav odlučivanja nije se promijenio.\n*Poduzeće ima direktora na papiru i drugog direktora u praksi.*\nTo je vrlo opasna situacija.\nNe samo za nasljednika, nego i za cijelu organizaciju.\nJer zaposlenici više ne znaju čije su odluke konačne.\nMenadžeri počinju birati kome će se obratiti.\nA novi direktor gubi autoritet prije nego što ga je uspio izgraditi.\nZato generacijska tranzicija nije završena imenovanjem nove uprave.\nOna zahtijeva i stvarni prijenos prava na odlučivanje.\n## 6 · Obitelj treba definirati pravila prije nego što nastane sukob\nVratimo se na naš početni primjer.\nSin želi investirati pet milijuna eura.\nOtac smatra da je rizik prevelik.\nKći želi dividendu.\nKako riješiti situaciju?\nPrvo treba razdvojiti pitanja.\nJe li riječ o investiciji koja je unutar odobrene strategije i ovlasti uprave?\nJe li potrebna suglasnost nekog drugog tijela?\nPostoji li unaprijed dogovorena politika raspodjele dobiti?\nKako vlasnici usuglašavaju svoja očekivanja?\nŠto se događa ako se ne mogu dogovoriti?\nVažno je razumjeti da ne postoji jedno univerzalno pravilo koje vrijedi za svako obiteljsko poduzeće.\nOvlasti ovise o pravnom obliku, zakonu, društvenim dokumentima i dogovorenom sustavu upravljanja.\nAli princip je univerzalan.\n*Pravila odlučivanja treba definirati prije nego što znamo koja će nam se konkretna odluka sviđati, a koja neće.*\nJer ako pravila počnemo pisati tek kada nastane konflikt, svatko će pokušati oblikovati sustav koji odgovara njegovu trenutačnom interesu.\nA tada više ne razgovaramo samo o upravljanju.\nRazgovaramo o povjerenju.\n## 7 · Dobar sustav odlučivanja štiti i obitelj i poduzeće\nPonekad osnivači smatraju da formalizacija pravila znači gubitak fleksibilnosti.\nDa će se obiteljski odnosi pretvoriti u birokraciju.\nDa će za svaku odluku trebati sastanak, zapisnik ili nečije odobrenje.\nAli dobro postavljen sustav upravljanja ne znači da se o svemu mora odlučivati kolektivno.\nUpravo suprotno.\n*Dobar sustav jasno određuje o čemu se ne mora raspravljati na obiteljskoj ili vlasničkoj razini.*\nTime se štiti uprava od nepotrebnih intervencija.\nVlasnike od odluka koje prelaze dogovorene granice.\nA članove obitelji od situacija u kojima svako poslovno neslaganje postaje osobni konflikt.\nCilj nije stvoriti više pravila.\nCilj je stvoriti dovoljno jasna pravila da poduzeće može normalno funkcionirati i kada se ljudi ne slažu.\n## ZAKLJUČAK\nNa početku smo imali tri osobe.\nOca koji je izgradio poduzeće.\nSina koji ga danas vodi.\nI kćer koja je suvlasnica.\nSvi imaju svoje interese.\nSvi imaju određenu odgovornost.\nAli njihove uloge nisu iste.\nI upravo zato ne mogu svi odlučivati o svemu.\nVlasništvo daje određena prava.\nUpravljanje nosi određene ovlasti i odgovornosti.\nA obiteljski odnosi trebaju ostati prostor povjerenja, a ne zamjena za sustav odlučivanja.\nZato bih svakom osnivaču i svakoj vlasničkoj obitelji postavio jedno pitanje.\n*Kada biste se sutra oko važne odluke ozbiljno razišli u mišljenjima, biste li znali tko ima pravo odlučiti?*\nI biste li tu odluku mogli prihvatiti čak i kada se s njom osobno ne slažete?\nJer budućnost obiteljskog poduzeća ne ovisi o tome hoće li se članovi obitelji uvijek slagati.\nOvisi i o tome imaju li sustav koji omogućuje donošenje odluka kada se ne slažu.\n*Kontinuitet ne zahtijeva jednoglasnost. Zahtijeva jasnoću odgovornosti.*\nKontinuitet se ne događa.\n*On se gradi.*"}, {"id": "dp13", "name": "13 · Governance nije birokracija", "body": "*Governance nije birokracija*\n*Zašto uspješna obiteljska poduzeća trebaju jasna pravila upravljanja?*\nZamislite poduzetnika koji je trideset godina gradio svoje poduzeće.\nDanas ima 250 zaposlenih, 40 milijuna eura prihoda i nekoliko članova obitelji uključenih u poslovanje.\nPoduzeće je uspješno.\nAli postoji jedna zanimljiva stvar.\nGotovo svaka važna odluka i dalje završava na njegovu stolu.\nAko treba odobriti veću investiciju, čeka se njega.\nAko se dva direktora ne mogu dogovoriti, zovu njega.\nAko član obitelji nije zadovoljan nekom odlukom, razgovara s njim.\nI sada mu netko predloži da uvede jasniji sustav upravljanja.\nDefinirane ovlasti.\nRedovito izvještavanje.\nStrukturirano donošenje strateških odluka.\nMožda i nadzorni ili savjetodavni odbor.\nA on odgovara:\n„Zašto bih uvodio svu tu birokraciju? Trideset godina smo uspješno poslovali bez toga.”\nI možda je u pravu.\nMožda mu takav sustav do sada doista nije trebao.\nAli postavio bih mu jedno drugo pitanje.\n*Ako vaše poduzeće za svaku važnu odluku treba vas, jeste li izgradili organizaciju koja može funkcionirati bez vas?*\nJer to je zapravo pitanje governancea.\n\n## 1 · Ono što je funkcioniralo u prvoj generaciji ne mora funkcionirati u drugoj\nU prvoj generaciji obiteljskog poslovanja sustav upravljanja često je vrlo jednostavan.\nOsnivač je vlasnik.\nOsnivač je direktor.\nOsnivač donosi najvažnije odluke.\nI takav model može biti izuzetno učinkovit.\nOdluke se donose brzo.\nNema dugotrajnih usuglašavanja.\nNema velikog broja formalnih tijela.\nSvi znaju tko je odgovoran.\nAli s vremenom poduzeće raste.\nDolaze profesionalni menadžeri.\nSljedeća generacija počinje preuzimati odgovornosti.\nVlasništvo se možda dijeli među više članova obitelji.\nI odjednom se pojavljuje problem.\nSustav koji je funkcionirao zato što je jedna osoba imala sve informacije i donosila sve odluke više ne odgovara stvarnosti.\n*Problem nije u tome što je osnivačev način upravljanja bio pogrešan.*\nProblem je u tome što se poduzeće promijenilo, a način odlučivanja nije.\nI zato profesionalizacija upravljanja ne znači odbacivanje onoga što je osnivač izgradio.\nOna znači prilagodbu sustava novoj fazi razvoja.\n## 2 · Governance ne znači više sastanaka\nKada poduzetnici čuju riječ governance, često pomisle na korporativne procedure.\nOdbore.\nZapisnike.\nPravilnike.\nSastanke.\nI dokumente koje nitko ne čita.\nAli to nije suština kvalitetnog upravljanja.\n*Dobar governance ne proizvodi više sastanaka. Proizvodi jasnije i legitimnije odluke.*\nZamislite dva poduzeća.\nU prvom, direktor želi investirati dva milijuna eura u novu tehnologiju.\nNe zna ima li ovlast donijeti odluku.\nRazgovara s ocem, koji je većinski vlasnik.\nOtac kaže da treba pitati i brata.\nBrat želi dodatne informacije.\nZatim se uključuje financijski direktor.\nNakon nekoliko tjedana razgovora odluka još nije donesena.\nU drugom poduzeću unaprijed je definirano koje investicije uprava može odobriti samostalno, a koje zahtijevaju dodatnu suglasnost.\nPoznati su kriteriji.\nPoznato je tko priprema prijedlog.\nPoznato je tko donosi odluku.\nI poznato je tko odgovara za rezultat.\nKoje je poduzeće birokratskije?\nOno koje ima definirana pravila?\nIli ono u kojem se za svaku važnu odluku mora ponovno pregovarati o tome tko ima pravo odlučiti?\n*Birokracija nije nužno postojanje pravila. Ponekad je najveća birokracija upravo njihovo nepostojanje.*\n## 3 · Dobar sustav upravljanja štiti poduzetničku brzinu\nOsnivači često strahuju da će profesionalizacijom izgubiti brzinu odlučivanja.\nI taj strah nije potpuno neutemeljen.\nLoše postavljen sustav može doista usporiti poslovanje.\nAko svaka odluka zahtijeva tri odobrenja, dva odbora i nekoliko sastanaka, stvorili smo problem.\nAli kvalitetan governance trebao bi raditi upravo suprotno.\nTrebao bi omogućiti da se većina odluka donosi tamo gdje postoji odgovornost za njihovu provedbu.\nUprava treba imati jasne ovlasti.\nMenadžeri trebaju znati unutar kojih granica mogu samostalno djelovati.\nVlasnici trebaju znati koje odluke pripadaju njihovoj razini.\nA kada se pojavi izvanredna situacija, treba postojati jasan način eskalacije.\n*Cilj nije da više ljudi odlučuje o svemu. Cilj je da pravi ljudi odlučuju o pravim stvarima.*\nTo je velika razlika.\nJer profesionalizacija ne bi trebala oduzeti poduzeću poduzetnički karakter.\nTrebala bi omogućiti da taj karakter preživi i nakon osnivača.\n## 4 · Vlasnici ne gube kontrolu kada prestanu donositi svaku odluku\nPostoji još jedna važna zabluda.\nOsnivač često vjeruje da će izgubiti kontrolu ako više ne bude uključen u svakodnevno poslovanje.\nAli kontrola i operativno upravljanje nisu isto.\nZamislite vlasnika koji više nije direktor.\nOn ne mora odlučivati o svakom zaposlenju.\nNe mora pregovarati sa svakim dobavljačem.\nNe mora odobravati svaki poslovni trošak.\nAli i dalje može imati vrlo važnu ulogu.\nSudjelovati u određivanju dugoročne vlasničke strategije.\nOsigurati da postoji kompetentna uprava.\nPratiti ostvarenje poslovnih ciljeva.\nRazumjeti financijske rizike.\nI kroz odgovarajuća tijela sudjelovati u odlukama koje pripadaju vlasničkoj razini.\nNaravno, u okviru zakona i pravila konkretnog društva.\n*Vlasnička kontrola ne mora značiti osobnu uključenost u svaku odluku.*\nDapače, kvalitetan sustav upravljanja može vlasniku dati bolji uvid u poslovanje nego stalne neformalne intervencije.\nJer umjesto da informacije dobiva samo kada nastane problem, vlasnik dobiva redovitu i strukturiranu sliku poslovanja.\nA uprava zna prema kojim se kriterijima procjenjuje njezin rad.\n## 5 · Obiteljski odnosi trebaju drugačiji prostor od poslovnih odluka\nU obiteljskim poduzećima postoji još jedna specifičnost.\nVlasnici nisu samo poslovni partneri.\nOni su roditelji, djeca, braća i sestre.\nI zato poslovna pitanja često ulaze u privatne odnose.\nZamislite obiteljski ručak.\nOtac pita sina, koji vodi poduzeće, zašto je zaposlio novog direktora prodaje.\nKći se uključuje i pita zašto ove godine nije bilo dividende.\nBrat počinje govoriti o investiciji s kojom se ne slaže.\nI odjednom obiteljski ručak postaje neformalna sjednica uprave i skupštine vlasnika.\nAli bez pripremljenih informacija.\nBez jasnog dnevnog reda.\nI bez dogovora tko zapravo ima pravo odlučivati.\nTo ne znači da obitelj ne treba razgovarati o poslovanju.\nNaprotiv.\nAli važno je razlikovati razgovor o zajedničkim očekivanjima od formalnog donošenja odluka.\n*Obitelj treba prostor za odnose. Vlasnici trebaju prostor za vlasničke odluke. A uprava treba prostor za vođenje poslovanja.*\nKada se sve tri stvari stalno miješaju, poslovni konflikti lako postaju obiteljski.\nI obrnuto.\nDobar governance pomaže stvoriti granice koje štite i jedno i drugo.\n## 6 · Ne treba svako obiteljsko poduzeće isti governance\nOvdje želim naglasiti nešto važno.\nNe postoji univerzalna struktura upravljanja koju bi svako obiteljsko poduzeće trebalo kopirati.\nPoduzeće s jednim vlasnikom i dvadeset zaposlenih nema iste potrebe kao obiteljska grupa s više stotina zaposlenih, nekoliko generacija vlasnika i profesionalnom upravom.\nNegdje je dovoljno jasno definirati ovlasti uprave i redovito financijsko izvještavanje.\nNegdje je potreban savjetodavni odbor.\nNegdje nadzorni odbor ima važnu ulogu u sustavu kontrole i odgovornosti.\nA u složenijim vlasničkim obiteljima može postojati i potreba za obiteljskim vijećem ili drugim oblikom strukturiranog vlasničkog dijaloga.\nPritom treba razlikovati tijela koja su zakonski obvezna od onih koja obitelj dobrovoljno uspostavlja.\nAli nije cilj stvoriti što više struktura.\n*Cilj je imati onoliko strukture koliko je potrebno da se odluke donose kvalitetno, odgovorno i pravodobno.*\nNi više.\nNi manje.\nJer pretjerana formalizacija može biti jednako štetna kao i potpuni izostanak pravila.\n## 7 · Pravi test governancea dolazi kada nastane neslaganje\nDok se svi slažu, gotovo svaki sustav upravljanja izgleda funkcionalno.\nOsnivač, nasljednici i menadžeri imaju zajedničke ciljeve.\nRezultati su dobri.\nOdluke se donose bez većih problema.\nAli pravi test dolazi kada se pojavi ozbiljno neslaganje.\nKada jedan vlasnik želi isplatu dobiti, a drugi reinvestiranje.\nKada uprava predloži akviziciju koju dio vlasnika smatra prerizičnom.\nKada osnivač smatra da novi direktor donosi pogrešnu odluku.\nIli kada se članovi obitelji ne mogu dogovoriti oko budućeg smjera poduzeća.\nTada postaje jasno postoji li stvarni sustav upravljanja.\nZnaju li svi tko ima pravo donijeti odluku?\nZnaju li kako se ta odluka donosi?\nI mogu li je prihvatiti čak i kada se s njom ne slažu?\n*Kvaliteta governancea ne mjeri se time koliko je lako odlučivati kada postoji suglasnost.*\nMjeri se i time može li sustav donositi legitimne odluke kada su interesi različiti.\nJer dugoročni kontinuitet ne može ovisiti o tome da se svi članovi obitelji uvijek slažu.\n## ZAKLJUČAK\nVratimo se na našeg poduzetnika s početka.\nTrideset godina uspješno je gradio poduzeće.\nDonosio odluke.\nPreuzimao rizike.\nRješavao probleme.\nI sada se pita zašto bi trebao uvoditi sustav upravljanja kada je sve dosad funkcioniralo.\nOdgovor je jednostavan.\nNe zato što je dosadašnji sustav bio pogrešan.\nNego zato što budućnost poduzeća ne bi trebala ovisiti o tome da on zauvijek ostane prisutan.\n*Najveći uspjeh osnivača nije samo izgraditi poduzeće koje dobro posluje dok ga on vodi.*\n*Nego izgraditi poduzeće koje može odgovorno donositi odluke i kada ga više ne vodi.*\nI upravo je to vrijednost kvalitetnog governancea.\nNe više pravila radi pravila.\nNe više sastanaka radi sastanaka.\nNego jasne ovlasti.\nOdgovornost.\nPovjerenje.\nI sposobnost organizacije da funkcionira bez stalnog oslanjanja na jednu osobu.\nZato bih svakom osnivaču postavio jedno pitanje.\n*Ako biste se sutra povukli iz svakodnevnog poslovanja, bi li vaše poduzeće nastavilo donositi dobre odluke?*\nIli bi svi čekali da se vratite?\nJer dobar governance nije birokracija.\n*To je način da poduzeće preraste ovisnost o svojem osnivaču.*\nKontinuitet se ne događa.\n*On se gradi.*"}, {"id": "dp14", "name": "14 · Pravila se dogovaraju prije konflikta", "body": "*Pravila se dogovaraju prije konflikta*\n*Zašto je najbolji trenutak za dogovor o budućnosti obiteljskog poduzeća upravo onda kada među članovima obitelji postoji povjerenje?*\nZamislite obitelj s troje djece.\nOtac je trideset godina gradio uspješno poduzeće.\nDjeca su odrasla. Svatko ima svoju obitelj, svoj život i svoje ambicije.\nOdnosi su dobri.\nZajedno provode blagdane, odlaze na obiteljska okupljanja i međusobno se poštuju.\nOtac je odlučio prenijeti vlasništvo na djecu.\nSvakome po jednu trećinu.\nJedno dijete vodi poduzeće, a drugo dvoje nisu uključeni u svakodnevno poslovanje.\nKada ih netko pita jesu li dogovorili kako će zajednički upravljati vlasništvom, otac odgovara:\n„Mi smo obitelj. Mi se uvijek možemo dogovoriti.”\nI možda je potpuno u pravu.\nAli onda, nekoliko godina poslije, jedno dijete želi prodati svoj udio.\nDrugo želi zadržati poduzeće i nastaviti investirati.\nTreće smatra da bi trebalo isplaćivati više dobiti.\nOdjednom, pitanje više nije samo što je najbolje za poduzeće.\nPitanje je i što je najbolje za svakoga od njih osobno.\nA pravila ne postoje.\n*I sada ljudi koji su cijeli život imali dobre odnose prvi put moraju pregovarati o pravilima koja izravno utječu na njihove osobne interese.*\nUpravo tu često počinju najteži obiteljski konflikti.\n\n## 1 · Povjerenje nije zamjena za dogovor\nJedna od najčešćih rečenica koju možemo čuti u uspješnim obiteljskim poduzećima jest:\n„Nama to ne treba. Mi se dobro slažemo.”\nI razumijem takav stav.\nKada obitelj ima dobre odnose, formalni dogovori mogu djelovati nepotrebno.\nZašto bismo razgovarali o tome što će se dogoditi ako se netko poželi povući?\nZašto bismo definirali kako se rješavaju neslaganja?\nZašto bismo razgovarali o mogućoj prodaji vlasničkog udjela?\nZar time ne pokazujemo da ne vjerujemo jedni drugima?\nAli ja na to gledam drugačije.\n*Povjerenje nije razlog da izbjegavamo dogovore. Povjerenje je upravo ono što nam omogućuje da ih kvalitetno postignemo.*\nJer kada postoji povjerenje, možemo otvoreno razgovarati o različitim mogućnostima.\nMožemo priznati da nemamo iste životne planove.\nMožemo razgovarati o novcu bez osjećaja da nas netko pokušava iskoristiti.\nI možemo dogovoriti pravila koja će vrijediti za sve, čak i kada se okolnosti promijene.\nZato najbolji trenutak za takav razgovor nije kada nastane problem.\nNego kada problema još nema.\n## 2 · Najteže je dogovarati pravila kada već znamo kome odgovaraju\nZamislite da troje članova obitelji zajednički posjeduje poduzeće.\nGodinama sve funkcionira.\nAli onda jedan član odluči da želi prodati svoj udio.\nMožda se želi preseliti.\nMožda želi pokrenuti vlastiti posao.\nMožda jednostavno više ne želi imati imovinu vezanu uz obiteljsko poduzeće.\nI sada postavlja pitanje:\n„Kako mogu izaći iz vlasništva?”\nOstali članovi obitelji odgovaraju:\n„Ne možeš sada otići. Poduzeću treba kapital.”\nOn kaže:\n„Ali to je moja imovina. Zašto ne bih imao pravo raspolagati njome?”\nI odjednom počinje rasprava.\nTko ima pravo kupiti njegov udio?\nPo kojoj cijeni?\nTko će procijeniti vrijednost?\nMože li udio kupiti netko izvan obitelji?\nKako će se kupnja financirati?\nTo su legitimna pitanja.\nAli sada svaka strana već zna kakav joj odgovor odgovara.\nOnaj tko želi izaći tražit će što veću slobodu i što povoljniju cijenu.\nOni koji žele ostati možda će nastojati zaštititi poduzeće i ograničiti ulazak novih vlasnika.\n*Kada pravila dogovaramo usred konflikta, više ne raspravljamo samo o principima. Pregovaramo o vlastitom interesu.*\nA to je puno teže.\nZato pravila izlaska iz vlasništva treba razmotriti prije nego što netko odluči otići.\n## 3 · Dividenda može postati obiteljski problem\nPostoji još jedna tema koja vrlo lako stvara napetosti.\nNovac.\nTočnije, raspodjela dobiti.\nZamislite da poduzeće ostvaruje tri milijuna eura godišnje dobiti.\nJedan član obitelji vodi poduzeće i želi investirati u novu proizvodnju.\nDrugi član obitelji nema druge značajne prihode i očekuje redovitu dividendu.\nTreći smatra da poduzeće treba smanjiti zaduženost.\nTko je u pravu?\nMožda svi imaju opravdane argumente.\nAli problem nastaje ako nikada nisu razgovarali o tome što vlasništvo treba značiti za svakoga od njih.\nJe li poduzeće prvenstveno instrument dugoročnog rasta?\nTreba li osiguravati redovite prihode vlasnicima?\nKoliki dio dobiti treba ostati u poslovanju?\nI prema kojim se kriterijima o tome odlučuje?\nNaravno, raspodjela dobiti ovisi i o financijskim mogućnostima poduzeća, zakonskim uvjetima i odgovarajućim odlukama nadležnih tijela.\nAli obitelj može unaprijed usuglasiti svoja načela i očekivanja.\n*Ako ne razgovarate o novcu dok su odnosi dobri, možda ćete o njemu prvi put ozbiljno razgovarati kada netko bude financijski ovisan o vašoj odluci.*\nA tada razgovor više nije samo financijski.\nPostaje emocionalan.\n## 4 · Pravila štite i one koji ostaju i one koji žele otići\nU obiteljskim poduzećima često postoji neizgovoreno očekivanje da svi članovi obitelji trebaju ostati vlasnici.\nKao da je izlazak iz vlasništva znak izdaje.\nAli zašto bi to nužno bilo tako?\nMožda jedan član obitelji želi život potpuno izvan obiteljskog poslovanja.\nMožda želi diversificirati vlastitu imovinu.\nMožda ima drugačiji odnos prema riziku.\nI možda je njegova odluka potpuno legitimna.\nIstodobno, oni koji žele nastaviti poslovanje imaju opravdan interes zaštititi stabilnost poduzeća.\nZato dobro postavljena pravila trebaju uzeti u obzir obje strane.\nNe samo kako spriječiti izlazak.\nNego kako omogućiti uređeni izlazak kada je to potrebno.\nNe samo kako zaštititi većinu.\nNego i kako zaštititi legitimna prava manjinskih vlasnika.\n*Dobar vlasnički dogovor ne mora držati obitelj zajedno pod svaku cijenu. Treba omogućiti da različiti životni izbori ne unište odnose među članovima obitelji.*\nTo je puno zreliji pristup kontinuitetu.\n## 5 · Najvažnija pravila odnose se na situacije o kojima ne želimo razmišljati\nPostoje teme koje obitelji često izbjegavaju.\nŠto ako jedan član obitelji umre?\nŠto ako se netko razvede?\nŠto ako jedan od vlasnika postane nesposoban donositi odluke?\nŠto ako direktor koji je ujedno član obitelji ne ostvaruje rezultate?\nŠto ako se vlasnici ne mogu dogovoriti oko prodaje poduzeća?\nŠto ako sljedeća generacija više ne želi zajednički posjedovati poslovanje?\nTo nisu ugodne teme.\nAli izbjegavanje razgovora ne znači da se takve situacije neće dogoditi.\n*Pravila ne pišemo zato što očekujemo najgore od svojih bližnjih. Pišemo ih zato što znamo da se životne okolnosti mogu promijeniti.*\nI zato obitelj treba imati dovoljno zrelosti da razgovara i o onome što se nada da nikada neće morati primijeniti.\nNaravno, dio tih pitanja uređuje se pravno obvezujućim dokumentima, a dio kroz obiteljske dogovore i načela.\nNije svaki obiteljski dogovor automatski pravno provediv.\nZato je važno razlikovati zajedničko razumijevanje od formalnih prava i obveza.\nAli prvi korak uvijek je razgovor.\n## 6 · Pravila nisu dovoljna ako ne postoji povjerenje\nOvdje želim naglasiti i drugu stranu.\nNe vjerujem da se svaki obiteljski problem može riješiti ugovorom.\nMožete imati izvrsno napisane dokumente.\nDetaljno definirane ovlasti.\nPravila izlaska.\nPolitiku dividendi.\nPostupke za rješavanje sporova.\nAli ako među članovima obitelji ne postoji osnovno povjerenje, ni najbolji dokument neće automatski stvoriti kvalitetne odnose.\nZato pravila ne treba promatrati kao zamjenu za obiteljski dijalog.\nOna su njegov rezultat.\n*Dobar dogovor ne počinje pitanjem što ćemo napisati u ugovor. Počinje pitanjem što zapravo želimo jedni od drugih i od zajedničkog vlasništva.*\nŽelimo li svi ostati vlasnici?\nImamo li istu viziju budućnosti?\nŠto očekujemo od poduzeća?\nŠto smatramo pravednim?\nI kako ćemo postupiti kada se naši interesi počnu razlikovati?\nTek nakon takvih razgovora formalni dokumenti dobivaju stvarni smisao.\n## 7 · Pravila treba dogovoriti dok nitko ne zna na kojoj će strani biti\nPostoji jedan princip koji smatram posebno korisnim.\nNajpravednija pravila često možemo dogovoriti onda kada još ne znamo hoće li nam osobno koristiti.\nZamislite da danas definirate pravila izlaska iz vlasništva.\nNe znate hoćete li za deset godina upravo vi željeti prodati svoj udio.\nNe znate hoćete li biti član obitelji koji želi ostati.\nNe znate hoćete li biti većinski ili manjinski vlasnik.\nI upravo zato imate bolju priliku razmišljati o pravilima koja su uravnotežena.\nKoja štite različite legitimne interese.\nKoja ne ovise o tome tko je trenutačno u povoljnijoj poziciji.\n*Pravila su najvrjednija kada ih dogovaramo kao principe, a ne kao oružje u konkretnom sukobu.*\nJer tada ona mogu postati temelj dugoročnog povjerenja.\n## ZAKLJUČAK\nVratimo se na obitelj s početka.\nTroje djece.\nJedno poduzeće.\nJednaki vlasnički udjeli.\nI odnosi koji su godinama bili dobri.\nNjihov problem nije bio u tome što su se jednog dana pojavili različiti interesi.\nTo je potpuno prirodno.\nProblem je bio u tome što nikada nisu razgovarali o tome kako će s tim razlikama živjeti.\nZato bih svakom osnivaču i svakoj vlasničkoj obitelji postavio jedno pitanje.\n*Postoji li nešto o čemu danas ne razgovarate zato što vjerujete da se nikada nećete sukobiti?*\nMožda je upravo to razgovor koji biste trebali voditi.\nDok još postoji povjerenje.\nDok nitko nije povrijeđen.\nDok nitko ne pokušava zaštititi svoju poziciju.\nI dok svi još imaju priliku zajedno definirati pravila koja će vrijediti za budućnost.\nJer svrha dobrog dogovora nije spriječiti svako neslaganje.\n*Svrha je spriječiti da neslaganje uništi odnose.*\nKontinuitet se ne događa.\n*On se gradi.*"}, {"id": "dp15", "name": "15 · Vlasništvo mora dopustiti različitost", "body": "*Vlasništvo mora dopustiti različitost*\n*Zašto obiteljski kontinuitet ne mora značiti zajedničko vlasništvo pod svaku cijenu?*\nZamislite poduzetnika koji je četrdeset godina gradio svoje poduzeće.\nOd male obiteljske radionice stvorio je uspješno poslovanje vrijedno nekoliko desetaka milijuna eura.\nIma troje djece.\nNajstariji sin već petnaest godina radi u poduzeću. Želi nastaviti razvijati poslovanje, investirati i preuzeti vodstvo.\nKći živi u inozemstvu. Izgradila je vlastitu karijeru i nema želju vratiti se u obiteljsko poduzeće.\nNajmlađi sin želi pokrenuti vlastiti posao. Ima potpuno drugačije ambicije.\nOtac ih jednog dana okupi i kaže:\n„Sve što sam stvorio, stvorio sam za vas. Želim da ovo poduzeće ostane u našoj obitelji i da ga jednog dana zajedno nastavite razvijati.”\nNjegova je namjera dobra.\nŽeli ostaviti nešto što će povezivati njegovu djecu.\nAli postoji jedan problem.\n*Njegova djeca ne žele istu budućnost.*\nI sada se postavlja pitanje.\nTrebaju li se djeca prilagoditi očevoj viziji obiteljskog kontinuiteta?\nIli obitelj treba pronaći model vlasništva koji dopušta da svatko od njih živi vlastiti život?\n\n## 1 · Djeca ne nasljeđuju iste ambicije\nJedna od najvećih pretpostavki u obiteljskim poduzećima jest da će sljedeća generacija nastaviti ono što je prethodna započela.\nOsnivač je možda cijeli život posvetio poduzeću.\nUložio je svoje vrijeme, novac, energiju i identitet.\nZa njega poduzeće nije samo imovina.\nOno je životno djelo.\nI potpuno je razumljivo da želi da ga njegova djeca nastave razvijati.\nAli djeca nisu odrastala u istim okolnostima kao njihov otac.\nNisu imala iste životne izazove.\nNisu razvila iste ambicije.\nI možda ne žele živjeti život kakav je živio njihov roditelj.\nJedno dijete želi biti poduzetnik.\nDrugo želi biti investitor.\nTreće želi profesionalnu karijeru koja nema nikakve veze s obiteljskim poslovanjem.\n*Različite ambicije ne znače da netko manje poštuje obitelj ili ono što je prethodna generacija stvorila.*\nOne samo znače da različiti ljudi imaju različite životne prioritete.\nA kvalitetan vlasnički sustav mora moći prihvatiti tu stvarnost.\n## 2 · Zajedničko vlasništvo nije isto što i zajednička vizija\nVratimo se našoj obitelji.\nTroje djece naslijedilo je poduzeće.\nSvako ima jednu trećinu vlasništva.\nAli njihove ambicije nisu iste.\nNajstariji sin želi nastaviti razvijati poslovanje.\nZa njega je poduzeće profesionalni izazov i životna karijera.\nKći želi dugoročno zadržati svoj udio, ali očekuje određenu financijsku korist.\nNajmlađi sin želi prodati svoj udio i investirati u vlastiti posao.\nSvi su vlasnici iste imovine.\nAli ne žele istu stvar.\nI sada dolazimo do važne razlike.\n*Zajedničko vlasništvo ne znači automatski i zajedničku viziju budućnosti.*\nTo ne znači da obitelj mora razdvojiti vlasništvo.\nMožda će uspjeti pronaći model koji odgovara svima.\nAli najprije mora priznati da postoje različiti interesi.\nJer ako obitelj očekuje da svi članovi razmišljaju jednako, svaka različita ambicija može se početi doživljavati kao problem.\nA ponekad i kao izdaja.\n## 3 · Kada obiteljska lojalnost postane vlasnička obveza\nOvdje dolazimo do emocionalno najosjetljivijeg dijela.\nZamislite da najmlađi sin kaže ocu:\n„Tata, ja ne želim biti vlasnik ovog poduzeća. Želim graditi nešto svoje.”\nKako će otac reagirati?\nMožda će razumjeti.\nAli možda će to doživjeti kao odbacivanje svega što je stvorio.\nMožda će reći:\n„Zar sam se četrdeset godina borio da biste vi sada prodavali ono što sam izgradio?”\nI odjednom poslovna odluka postaje emocionalno pitanje.\nSin više ne razgovara samo o svojem vlasničkom udjelu.\nOn se mora opravdavati zašto ne želi nastaviti očev životni projekt.\n*U tom trenutku vlasništvo prestaje biti samo pravo. Postaje dokaz obiteljske lojalnosti.*\nA to može biti vrlo teško breme za sljedeću generaciju.\nJer dijete može voljeti svoju obitelj, poštovati roditelja i biti zahvalno na svemu što je naslijedilo.\nA ipak ne željeti ostati vlasnik obiteljskog poduzeća.\nTe dvije stvari nisu u suprotnosti.\n## 4 · Vlasništvo mora omogućiti različite odnose prema riziku\nPostoji još jedna dimenzija koja se često zanemaruje.\nNisu svi članovi obitelji spremni preuzimati isti rizik.\nZamislite dva brata.\nJedan vodi poduzeće i želi uložiti deset milijuna eura u novu proizvodnju.\nVjeruje da je to prilika za značajan rast.\nDrugi ne radi u poduzeću.\nNjegova ukupna imovina gotovo je u cijelosti vezana uz vlasnički udio koji je naslijedio.\nOn smatra da je takva investicija prerizična.\nTko je u pravu?\nMožda prvi brat bolje razumije poslovnu priliku.\nAli možda drugi ima potpuno legitimnu zabrinutost zbog koncentracije vlastite imovine.\nJedan razmišlja kao poduzetnik koji želi rasti.\nDrugi kao vlasnik koji želi zaštititi kapital.\n*Različita spremnost na rizik nije nužno pitanje hrabrosti ili sposobnosti. Ona može proizlaziti iz različitih životnih okolnosti i financijskih ciljeva.*\nZato vlasnička obitelj treba razgovarati i o tome kakav rizik želi zajednički preuzimati.\nJer dugoročno vlasništvo nije samo pitanje koliko kapitala posjedujemo.\nNego i koliko rizika želimo nositi zajedno.\n## 5 · Izlazak iz vlasništva ne mora značiti prekid obiteljskih odnosa\nU mnogim obiteljima postoji snažna želja da poduzeće ostane u obiteljskom vlasništvu.\nI to je potpuno legitiman cilj.\nAli postavio bih jedno pitanje.\nŠto ako jedan član obitelji više ne želi biti vlasnik?\nMora li njegova odluka automatski ugroziti odnose s ostalima?\nNe mora.\nObitelj može unaprijed dogovoriti pod kojim uvjetima netko može izaći iz vlasništva.\nKako se utvrđuje vrijednost udjela.\nImaju li ostali članovi obitelji pravo prvenstva kupnje.\nKako se izlazak može financirati bez ugrožavanja poslovanja.\nI postoje li ograničenja koja štite stabilnost poduzeća.\nNaravno, takva rješenja moraju biti usklađena s pravnim okvirom i stvarnim financijskim mogućnostima.\nAli ključna ideja nije samo tehnička.\nOna je ljudska.\n*Mogućnost izlaska iz zajedničkog vlasništva može biti način da se sačuva odnos među članovima obitelji.*\nJer nije svako razdvajanje neuspjeh.\nPonekad je upravo dogovoreno razdvajanje znak zrelosti.\n## 6 · Kontinuitet obitelji nije isto što i kontinuitet zajedničkog vlasništva\nOvo je možda najvažnija misao cijele epizode.\nKada govorimo o kontinuitetu obiteljskog poslovanja, često pretpostavljamo da poduzeće mora ostati u vlasništvu iste obitelji.\nI po mogućnosti svih njezinih članova.\nAli zašto bi to uvijek bio jedini ispravan ishod?\nZamislite da jedna grana obitelji nastavi voditi i posjedovati poduzeće.\nDruga odluči izaći iz vlasništva i razvijati vlastite investicije.\nTreća se posveti potpuno drugačijem profesionalnom putu.\nMožda više ne dijele isto poduzeće.\nAli i dalje dijele obiteljske odnose.\nZajedničku povijest.\nVrijednosti.\nI poštovanje prema onome što je prethodna generacija stvorila.\n*Kontinuitet obitelji ne mora značiti kontinuitet zajedničkog vlasništva nad istom imovinom.*\nPonekad će najbolji način očuvanja poduzeća biti da vlasništvo ostane koncentrirano kod članova obitelji koji ga žele dugoročno razvijati.\nPonekad će zajedničko vlasništvo funkcionirati izuzetno dobro.\nA ponekad će razdvajanje biti razumnije.\nNe postoji jedan model koji odgovara svakoj obitelji.\nAli postoji važan princip.\nObiteljski kontinuitet ne bi trebao zahtijevati da svi članovi obitelji odustanu od vlastitih životnih ambicija.\n## 7 · Najvažnije pitanje za osnivača\nVratimo se na oca s početka.\nČetrdeset godina gradio je poduzeće.\nNjegova je želja da djeca ostanu zajedno.\nDa nastave ono što je stvorio.\nDa se obiteljsko ime i dalje povezuje s uspješnim poslovanjem.\nAli sada zamislite da mu postavimo jedno pitanje.\n*Što vam je važnije: da vaša djeca zauvijek ostanu suvlasnici istog poduzeća ili da za dvadeset godina i dalje imaju dobre međusobne odnose?*\nMožda će odgovoriti da želi oboje.\nI to je razumljivo.\nAli što ako jednog dana bude morao birati?\nŠto ako zajedničko vlasništvo postane izvor trajnog nezadovoljstva?\nŠto ako jedno dijete osjeća da je zarobljeno u imovini kojom ne može slobodno raspolagati?\nŠto ako drugo smatra da mora nositi sav teret upravljanja, dok ostali imaju drugačija očekivanja?\nU takvoj situaciji osnivač treba preispitati vlastitu predodžbu kontinuiteta.\nJer možda njegov najveći doprinos budućnosti obitelji neće biti u tome da djecu obveže na zajedničko vlasništvo.\nNego da im pomogne izgraditi odnose i pravila koja dopuštaju različite životne izbore.\n## ZAKLJUČAK\nNa početku smo imali troje djece.\nJedno želi voditi poduzeće.\nDrugo želi ostati investitor.\nTreće želi krenuti vlastitim putem.\nNjihov otac želi da ostanu zajedno.\nI u toj želji nema ništa pogrešno.\nAli postoji razlika između želje da obitelj ostane povezana i očekivanja da svi članovi obitelji moraju imati isti odnos prema poduzeću.\nZato bih svakom osnivaču postavio jedno pitanje.\n*Jeste li svojoj djeci ostavili slobodu da sama odluče kakav odnos žele imati prema vlasništvu koje će naslijediti?*\nIli ste zajedno s imovinom na njih prenijeli i očekivanje da moraju nastaviti život koji ste vi odabrali?\nJer obiteljsko vlasništvo treba imati dovoljno prostora za različite ambicije.\nZa različite životne putove.\nI za različite odnose prema kapitalu.\n*Obitelj ne mora posjedovati sve zajedno da bi ostala zajedno.*\nPonekad je upravo sloboda izbora ono što omogućuje da odnosi potraju.\nKontinuitet se ne događa.\n*On se gradi.*"}, {"id": "dp16", "name": "16 · Kontinuitet nije nužno kontinuitet kompanije", "body": "*Kontinuitet nije nužno kontinuitet kompanije*\n*Može li prodaja obiteljskog poduzeća biti najbolja odluka za budućnost obitelji?*\nZamislite poduzetnika koji je četrdeset godina gradio svoje poduzeće.\nPočeo je s nekoliko zaposlenih.\nDanas poduzeće ostvaruje 50 milijuna eura prihoda, zapošljava 300 ljudi i jedno je od uspješnijih u svojoj industriji.\nIma troje odrasle djece.\nJedno radi u poduzeću, ali ne želi preuzeti odgovornost za njegovo vođenje.\nDrugo je izgradilo uspješnu karijeru u inozemstvu.\nTreće ima potpuno drugačije životne ambicije.\nU međuvremenu, poduzeće dobiva ozbiljnu ponudu za preuzimanje.\nInvestitor nudi 40 milijuna eura.\nOsnivač se nalazi pred jednom od najtežih odluka u svojem životu.\nAko proda, obitelj će raspolagati značajnim kapitalom.\nPoduzeće će možda dobiti novog vlasnika koji ima resurse za njegov daljnji razvoj.\nA djeca će imati slobodu graditi vlastite životne putove.\nAli osnivač ne može izbjeći osjećaj da prodajom završava nešto što je stvarao cijeli život.\nI zato kaže:\n„Nisam ja ovo gradio četrdeset godina da bih ga na kraju prodao.”\nRazumijem tu rečenicu.\nAli postavio bih mu jedno pitanje.\n*Jeste li četrdeset godina gradili poduzeće kako bi ono zauvijek ostalo vaše ili kako biste svojoj obitelji stvorili bolju budućnost?*\nJer to nisu nužno iste stvari.\n\n## 1 · Poduzeće i obiteljski kontinuitet nisu isto\nKada govorimo o kontinuitetu obiteljskog poslovanja, često automatski pretpostavljamo da poduzeće mora ostati u obiteljskom vlasništvu.\nDa ga sljedeća generacija mora preuzeti.\nDa ga mora nastaviti razvijati.\nI da će se uspješnost generacijske tranzicije mjeriti time je li poduzeće ostalo u obitelji.\nAli želim otvoriti drugačiju perspektivu.\n*Kontinuitet obitelji ne mora značiti kontinuitet vlasništva nad istim poduzećem.*\nPoduzeće je jedan od oblika u kojem je obitelj stvorila vrijednost.\nAli nije nužno jedini oblik u kojem tu vrijednost može očuvati.\nZamislite da obitelj proda poduzeće i dio kapitala investira u druga poduzeća.\nDio u financijsku imovinu.\nDio u nekretnine.\nMožda sljedeća generacija pokrene vlastite poduzetničke projekte.\nMožda obitelj osnuje investicijsko društvo ili razvije vlastitu strukturu za upravljanje kapitalom.\nObiteljsko bogatstvo može nastaviti postojati i razvijati se, iako poduzeće koje ga je stvorilo više nije u obiteljskom vlasništvu.\nNaravno, to nije automatski ishod.\nKapital se nakon prodaje može i izgubiti.\nAli upravo zato trebamo razlikovati kontinuitet poduzeća od kontinuiteta obiteljskog kapitala.\n## 2 · Najveća vrijednost obitelji često je koncentrirana u jednom poduzeću\nPostoji jedna specifičnost uspješnih poduzetničkih obitelji.\nOsnivač je često najveći dio svoje imovine stvorio kroz jedno poduzeće.\nMožda je upravo to poduzeće danas vrijedno 30, 50 ili 100 milijuna eura.\nAli ostatak njegove imovine relativno je malen.\nDrugim riječima, gotovo cjelokupno obiteljsko bogatstvo koncentrirano je u jednom poslovanju.\nU jednoj industriji.\nNa jednom tržištu.\nI često ovisi o relativno malom broju ključnih ljudi.\nTo nije nužno bila pogreška.\nNaprotiv.\nUpravo je koncentracija kapitala, vremena i energije možda omogućila osnivaču da stvori tako vrijedno poduzeće.\n*Koncentracija često stvara poduzetničko bogatstvo. Ali ista koncentracija može postati ozbiljan rizik za njegovo dugoročno očuvanje.*\nI tu dolazimo do važne razlike.\nStrategija koja je bila uspješna za stvaranje bogatstva ne mora biti najbolja strategija za njegovo očuvanje.\nOsnivač je možda bio spreman preuzimati velike rizike.\nAli sada ima sedamdeset godina.\nNjegova djeca imaju vlastite obitelji.\nA velik dio njihove buduće financijske sigurnosti ovisi o uspjehu jednog poduzeća.\nU takvim okolnostima prodaja cijelog poduzeća, prodaja manjinskog udjela ili neki drugi oblik diversifikacije može biti legitimna strateška mogućnost.\nNe zato što obitelj odustaje od poduzetništva.\nNego zato što se njezini ciljevi mijenjaju.\n## 3 · Zadržavanje poduzeća također je investicijska odluka\nKada poduzetnik dobije ponudu za prodaju, često se pita:\n„Trebam li prodati?”\nAli postoji i drugo pitanje.\n*„Kada danas ne bih bio vlasnik ovog poduzeća, bih li u njega investirao gotovo cjelokupnu svoju imovinu?”*\nTo je zanimljiv način promatranja odluke.\nJer vlasništvo koje smo naslijedili ili desetljećima gradili često doživljavamo drugačije od kapitala koji bismo danas trebali investirati.\nEmocionalno smo vezani uz poduzeće.\nPoznajemo ljude.\nPoznajemo njegovu povijest.\nI imamo osjećaj da je zadržavanje vlasništva prirodna odluka.\nAli zadržavanje vlasništva također je odluka o kapitalu.\nTo znači da nastavljamo prihvaćati poslovne rizike.\nNastavljamo biti izloženi određenoj industriji.\nI nastavljamo vjerovati da je upravo to najbolji način korištenja našeg kapitala.\nMožda doista jest.\nMožda poduzeće ima izuzetne perspektive rasta.\nMožda je sljedeća generacija sposobna i motivirana nastaviti ga razvijati.\nMožda postoje dobri razlozi da ostane u obiteljskom vlasništvu.\nAli takva odluka treba biti svjesna.\n*Ne bismo trebali zadržavati poduzeće samo zato što nam je teško zamisliti život nakon njega.*\n## 4 · Prodaja poduzeća ne znači nužno odustajanje od onoga što je osnivač stvorio\nVratimo se na poduzetnika s početka.\nČetrdeset godina gradio je poduzeće.\nStvorio je radna mjesta.\nRazvio proizvode.\nIzgradio odnose s kupcima.\nStvorio poslovnu kulturu.\nI sada razmatra prodaju.\nZnači li prodaja da sve to nestaje?\nNe nužno.\nPoduzeće može nastaviti poslovati.\nMože nastaviti zapošljavati ljude.\nMože razvijati nove proizvode.\nMože rasti i izvan granica koje je osnivač mogao samostalno dosegnuti.\nNaravno, novi vlasnik može promijeniti strategiju, organizaciju ili kulturu. Prodaja sama po sebi ne jamči očuvanje osnivačeve ostavštine.\nZato je važno i kome se poduzeće prodaje, pod kojim uvjetima i s kakvom vizijom njegove budućnosti.\nAli ključna misao ostaje.\n*Promjena vlasnika ne znači automatski i kraj onoga što je poduzetnik izgradio.*\nPonekad je upravo novi vlasnik osoba koja može omogućiti sljedeću fazu razvoja poduzeća.\nA obitelj može nastaviti graditi svoju budućnost na drugačiji način.\n## 5 · Nakon prodaje počinje potpuno drugačija odgovornost\nOvo je dio o kojem se, prema mojem mišljenju, premalo razgovara.\nZamislite da obitelj proda poduzeće za 40 milijuna eura.\nNakon podmirenja obveza, poreza i transakcijskih troškova ostane joj značajan kapital.\nDo jučer je obitelj imala poduzeće.\nZaposlenike.\nKupce.\nProizvodnju.\nUpravu.\nPoslovnu strategiju.\nA danas ima kapital kojim treba upravljati.\nNa prvi pogled može izgledati da je najteži posao završen.\nAli možda je tek započeo.\nJer upravljanje operativnim poduzećem i upravljanje velikim financijskim bogatstvom zahtijevaju različite kompetencije.\nOsnivač je možda izvanredan poduzetnik.\nAli to ne znači da automatski zna izgraditi diverzificirani investicijski portfelj.\nMožda zna procijeniti rizike svoje industrije.\nAli ne poznaje dovoljno tržišta kapitala, privatne investicije ili međunarodno strukturiranje imovine.\nI zato nakon prodaje obitelj mora odgovoriti na nova pitanja.\nKoliko kapitala želimo očuvati?\nKoliko smo spremni riskirati?\nKoliko nam je likvidnosti potrebno?\nTko će donositi investicijske odluke?\nKako ćemo zaštititi kapital od loših odluka, nepotrebnih troškova i međusobnih sukoba?\nI kako ćemo pripremiti sljedeću generaciju za odgovorno upravljanje imovinom?\n*Prodajom poduzeća ne završava odgovornost prema obiteljskom bogatstvu. Mijenja se njezin oblik.*\n## 6 · Najveći rizik nakon prodaje možda nije financijski\nPostoji još jedna dimenzija koju ne smijemo zanemariti.\nIdentitet osnivača.\nZamislite čovjeka koji je četrdeset godina svako jutro dolazio u svoje poduzeće.\nZaposlenici su ga poznavali.\nKupci su ga zvali.\nLjudi su ga povezivali s poslovanjem koje je izgradio.\nA onda jednog dana proda poduzeće.\nOdjednom više nije direktor.\nViše nije osoba koja donosi najvažnije poslovne odluke.\nViše nema istu svakodnevnu ulogu.\nI sada se pojavljuje pitanje koje je možda teže od svih financijskih pitanja.\n*Tko sam ja kada više nisam vlasnik poduzeća koje me definiralo četrdeset godina?*\nZato prodaja nije samo financijska transakcija.\nZa osnivača ona može značiti i duboku osobnu tranziciju.\nA za obitelj promjenu načina života, odnosa i očekivanja.\nAko se o tome ne razgovara na vrijeme, čak i financijski vrlo uspješna prodaja može ostaviti osjećaj gubitka.\nZato je važno pripremati ne samo poduzeće za prodaju nego i osnivača i obitelj za život nakon nje.\n## 7 · Što zapravo želimo sačuvati?\nI sada dolazimo do pitanja koje smatram središnjim za ovu epizodu.\nKada govorimo o obiteljskom kontinuitetu, što zapravo želimo sačuvati?\nPravno vlasništvo nad istim poduzećem?\nObiteljsko bogatstvo?\nPoduzetnički duh?\nVrijednosti koje je osnivač izgradio?\nSposobnost sljedeće generacije da stvara novu vrijednost?\nIli kvalitetne odnose među članovima obitelji?\nNaravno, moguće je željeti sve navedeno.\nAli ne mora uvijek biti moguće sve istodobno ostvariti.\nPonekad će očuvanje poduzeća biti najbolji put.\nPonekad će profesionalizacija upravljanja omogućiti da poduzeće ostane u obiteljskom vlasništvu bez operativne uključenosti obitelji.\nA ponekad će prodaja biti odgovorna odluka.\n*Kontinuitet ne bi trebalo mjeriti samo time je li obitelj zadržala isto poduzeće.*\nTreba ga promatrati i kroz sposobnost obitelji da očuva vrijednost, odnose i mogućnost donošenja slobodnih odluka u budućnosti.\n## ZAKLJUČAK\nVratimo se na našeg poduzetnika.\nČetrdeset godina gradio je poduzeće.\nSada ima ponudu za prodaju.\nI boji se da će prodajom završiti njegova životna priča.\nAli možda je pravo pitanje drugačije.\nŠto ako ono što je izgradio nije samo poduzeće?\nŠto ako je izgradio kapital koji može omogućiti novim generacijama da stvaraju vlastite poduzetničke priče?\nŠto ako je stvorio slobodu izbora koju sam nije imao?\nI što ako njegova ostavština ne mora biti ista kompanija, nego sposobnost obitelji da odgovorno upravlja onime što je stvorio?\nZato bih svakom osnivaču postavio jedno pitanje.\n*Želite li da vaša djeca naslijede vaše poduzeće ili želite da naslijede mogućnost da sami oblikuju svoju budućnost?*\nMožda je odgovor oboje.\nAli ako nije, važno je razumjeti što vam je doista najvažnije.\nJer prodaja obiteljskog poduzeća ne mora značiti prekid kontinuiteta.\nPonekad može biti njegov novi početak.\n*Kontinuitet nije nužno očuvanje iste imovine. To je sposobnost da vrijednost koju je jedna generacija stvorila postane temelj budućnosti sljedećih generacija.*\nKontinuitet se ne događa.\n*On se gradi.*"}, {"id": "dp17", "name": "17 · Što sljedeća generacija zapravo nasljeđuje", "body": "*Što sljedeća generacija zapravo nasljeđuje?*\n*Zašto prijenos bogatstva nije isto što i prijenos sposobnosti da se njime odgovorno upravlja?*\nZamislite poduzetnika koji je četrdeset godina gradio svoje poslovanje.\nPočeo je gotovo bez kapitala.\nRadio je po dvanaest sati dnevno.\nZaduživao se.\nPreuzimao rizike.\nProlazio kroz krize u kojima nije znao hoće li moći isplatiti plaće.\nDanas njegovo poduzeće vrijedi 50 milijuna eura.\nIma dvoje odrasle djece.\nOdrasli su u potpuno drugačijim okolnostima.\nNikada nisu morali razmišljati hoće li obitelj imati dovoljno novca za sljedeći mjesec.\nNisu morali založiti vlastitu imovinu da bi financirali poslovanje.\nNisu prošli kroz sve odluke koje su njihova oca dovele do uspjeha.\nI sada dolazi trenutak prijenosa vlasništva.\nSvako dijete nasljeđuje polovicu poduzeća.\nNa papiru, svatko dobiva imovinu vrijednu 25 milijuna eura.\nAli postavio bih jedno pitanje.\n*Jesu li naslijedili i ono što je njihovu ocu omogućilo da tih 50 milijuna stvori?*\nJer vlasnički udjeli mogu se prenijeti jednim pravnim postupkom.\nAli iskustvo, prosudba, odgovornost i sposobnost donošenja teških odluka ne prenose se tako jednostavno.\nI upravo je to jedan od najvećih izazova obiteljskog kontinuiteta.\n\n## 1 · Nasljeđujemo imovinu, ali ne nužno i iskustvo\nPrva generacija često stvara bogatstvo kroz poduzetništvo.\nOsnivač je morao naučiti donositi odluke u neizvjesnosti.\nMorao je preuzimati rizike.\nMorao je razumjeti posljedice pogrešaka.\nI možda najvažnije, morao je naučiti da svaka odluka ima svoju cijenu.\nSljedeća generacija često odrasta u potpuno drugačijem okruženju.\nU okruženju u kojem kapital već postoji.\nU kojem je poslovanje razvijeno.\nU kojem su mnogi problemi već riješeni.\nI to nije ništa loše.\nNaprotiv.\nJedan od razloga zbog kojih ljudi grade uspješna poduzeća upravo je želja da njihova djeca imaju bolji život.\nAli postoji jedan paradoks.\n*Uspjeh prve generacije može drugoj generaciji ukloniti upravo ona iskustva kroz koja je prva razvila svoje sposobnosti.*\nOsnivač je naučio upravljati rizikom jer je morao.\nNjegova djeca možda nikada nisu bila u situaciji u kojoj su morala preuzeti takvu odgovornost.\nZato nasljeđivanje bogatstva ne znači automatski i nasljeđivanje sposobnosti njegova očuvanja.\n## 2 · Ne nasljeđujemo samo novac. Nasljeđujemo odnos prema novcu.\nZamislite dvije obitelji koje imaju jednako bogatstvo.\nU prvoj obitelji o novcu se otvoreno razgovara.\nDjeca razumiju kako je kapital stvoren.\nZnaju da poduzeće može ostvarivati dobit, a istodobno imati problema s likvidnošću.\nRazumiju razliku između osobne potrošnje i poslovnih investicija.\nI postupno se uključuju u razgovore o odgovornosti koju vlasništvo nosi.\nU drugoj obitelji o novcu se gotovo nikada ne razgovara.\nDjeca znaju da je obitelj bogata.\nAli ne razumiju strukturu imovine.\nNe znaju koliko je poslovanje zaduženo.\nNe razumiju zašto se neke godine isplaćuje dividenda, a druge ne.\nI nitko ih nije pripremao za odluke koje će jednoga dana morati donositi.\nObje obitelji mogu ostaviti jednaku vrijednost imovine.\nAli ne ostavljaju jednaku pripremljenost.\n*Način na koji obitelj razgovara o novcu često je jednako važan kao i količina novca koju prenosi.*\nJer sljedeća generacija ne nasljeđuje samo kapital.\nNasljeđuje i uvjerenja o tome što kapital znači.\nJe li novac sredstvo slobode?\nIzvor sigurnosti?\nDokaz uspjeha?\nIli nešto o čemu se ne smije otvoreno razgovarati?\nTa uvjerenja kasnije mogu snažno utjecati na vlasničke odluke.\n## 3 · Nasljeđujemo i očekivanja koja nikada nisu izgovorena\nPostoji još jedna vrsta nasljedstva.\nOna koju nećete pronaći u bilanci.\nObiteljska očekivanja.\nZamislite sina koji je odrastao uz oca poduzetnika.\nCijeli život sluša koliko je obiteljsko poduzeće važno.\nKoliko je otac žrtvovao da bi ga izgradio.\nKoliko je ljudi zaposleno.\nKoliko je odgovornosti na njegovim leđima.\nI nitko sinu nikada izravno ne kaže da mora preuzeti poduzeće.\nAli on svejedno odrasta s osjećajem da se to od njega očekuje.\nMožda želi biti liječnik.\nMožda želi živjeti u drugoj državi.\nMožda jednostavno nema interes za upravljanje velikim poslovnim sustavom.\nAli osjeća da bi odbijanjem iznevjerio oca.\n*Ponekad sljedeća generacija ne nasljeđuje samo poduzeće. Nasljeđuje i osjećaj da nema pravo odabrati drugačiji život.*\nI to može biti vrlo teško nasljedstvo.\nJer zahvalnost prema roditeljima ne bi trebala značiti obvezu da živimo njihove ambicije.\nOsnivač ima pravo željeti kontinuitet poslovanja.\nAli sljedeća generacija treba imati prostor da pronađe vlastiti odnos prema toj ostavštini.\n## 4 · Nasljeđujemo odnose koje nismo sami izgradili\nZamislite da dva brata naslijede obiteljsko poduzeće.\nJedan je godinama radio u poslovanju.\nDrugi je izgradio vlastitu karijeru.\nNjihov otac uvijek je donosio konačne odluke.\nKada bi se braća oko nečega razišla, otac bi presudio.\nKada bi se pojavila napetost, on bi je smirio.\nI sada oca više nema u upravljanju.\nBraća prvi put moraju samostalno donositi zajedničke vlasničke odluke.\nAli nikada nisu naučila kako se međusobno dogovarati.\nNikada nisu morala otvoreno razgovarati o različitim interesima.\nNikada nisu razvila vlastiti način rješavanja neslaganja.\nI odjednom otkrivaju da nisu naslijedila samo poduzeće.\n*Naslijedila su i način na koji je njihova obitelj desetljećima rješavala, ili izbjegavala, konflikte.*\nAko je osnivač uvijek bio jedini autoritet, sljedeća generacija možda nije razvila sposobnost zajedničkog odlučivanja.\nAko se o važnim temama šutjelo, ta šutnja ne nestaje prijenosom vlasništva.\nA ako su među članovima obitelji postojale neizgovorene zamjerke, one se također mogu prenijeti u novu generaciju.\nZato kontinuitet nije samo pitanje prijenosa vlasničkih udjela.\nOn je i pitanje kvalitete odnosa koji ostaju nakon osnivača.\n## 5 · Bogatstvo može stvoriti slobodu, ali i ovisnost\nČesto govorimo da je jedna od najvećih vrijednosti obiteljskog bogatstva sloboda.\nSloboda da biramo čime ćemo se baviti.\nSloboda da ne moramo donositi odluke isključivo zbog novca.\nSloboda da možemo preuzimati određene rizike.\nAli bogatstvo ne stvara automatski takvu slobodu.\nPonekad može stvoriti upravo suprotno.\nZamislite nasljednika koji ima značajnu imovinu, ali nikada nije razvio vlastitu profesionalnu kompetenciju.\nNikada nije morao samostalno donositi financijske odluke.\nNikada nije razvio osjećaj odgovornosti za posljedice svojih izbora.\nFinancijski je neovisan.\nAli možda nije razvio sposobnost da samostalno upravlja vlastitim životom.\n*Financijska neovisnost nije nužno isto što i osobna samostalnost.*\nI upravo je zato važno da sljedeća generacija ne naslijedi samo pristup kapitalu.\nTreba razviti i sposobnost donošenja odluka.\nSposobnost preuzimanja odgovornosti.\nI osjećaj da vlastita vrijednost ne proizlazi isključivo iz obiteljskog bogatstva.\nJer cilj nasljeđivanja ne bi trebao biti samo omogućiti djeci da ne moraju raditi.\nCilj bi trebao biti omogućiti im da imaju slobodu izabrati što će vrijedno raditi sa svojim životom.\n## 6 · Vlasnička kompetencija mora se razvijati\nOvdje dolazimo do jedne važne razlike.\nNe mora svako dijete postati direktor obiteljskog poduzeća.\nNe mora svatko biti poduzetnik.\nNe mora svatko raditi u obiteljskom poslovanju.\nAli ako će netko naslijediti značajan vlasnički udio, trebao bi razumjeti odgovornost koju taj udio nosi.\nTo znači razumjeti osnovne financijske informacije.\nRazlikovati dobit od novčanog toka.\nRazumjeti poslovne i investicijske rizike.\nZnati postavljati kvalitetna pitanja upravi.\nRazumjeti vlastita vlasnička prava i odgovornosti.\nI biti sposoban sudjelovati u donošenju važnih odluka o kapitalu.\n*Ne morate biti direktor da biste bili dobar vlasnik. Ali morate razviti sposobnost odgovornog vlasništva.*\nI ta se sposobnost ne razvija automatski nasljeđivanjem udjela.\nOna zahtijeva vrijeme.\nUčenje.\nIskustvo.\nI postupno preuzimanje odgovornosti.\nZato priprema sljedeće generacije ne bi trebala početi nekoliko mjeseci prije prijenosa vlasništva.\nOna bi trebala biti dugoročan proces.\n## 7 · Najvrjednije nasljedstvo možda nije ono što možemo procijeniti\nVratimo se na poduzetnika s početka.\nStvorio je poduzeće vrijedno 50 milijuna eura.\nI želi ga ostaviti svojoj djeci.\nAli sada zamislite dvije moguće budućnosti.\nU prvoj, djeca nasljeđuju vlasništvo.\nImaju značajnu imovinu.\nAli ne razumiju dovoljno poslovanje.\nNe znaju zajednički donositi odluke.\nImaju različita očekivanja koja nikada nisu otvoreno izgovorila.\nI postupno se među njima pojavljuju sukobi.\nU drugoj, djeca također nasljeđuju vlasništvo.\nAli godinama prije toga sudjelovala su u razgovorima o budućnosti obitelji.\nRazumiju osnovne principe upravljanja kapitalom.\nZnaju koje su njihove odgovornosti.\nMogu otvoreno razgovarati o različitim interesima.\nI imaju slobodu odabrati kakvu ulogu žele imati.\nVrijednost naslijeđene imovine može biti potpuno jednaka.\nAli kvaliteta nasljedstva nije ista.\n*Jer ono što obitelj ostavlja sljedećoj generaciji nije samo vrijednost kapitala. Nego i sposobnost da s tim kapitalom odgovorno živi.*\n## ZAKLJUČAK\nKada govorimo o nasljeđivanju, često se usredotočujemo na ono što je moguće prenijeti pravnim dokumentima.\nVlasničke udjele.\nNekretnine.\nNovac.\nInvesticije.\nAli postoje stvari koje ne možemo jednostavno prenijeti potpisom.\nIskustvo.\nProsudbu.\nOdgovornost.\nPovjerenje.\nSposobnost zajedničkog odlučivanja.\nI slobodu da sljedeća generacija izgradi vlastiti identitet.\nZato bih svakom osnivaču postavio jedno pitanje.\n*Pripremate li svoju djecu da naslijede vašu imovinu ili ih pripremate da odgovorno upravljaju onime što će naslijediti?*\nJer to nisu iste stvari.\nMožete im ostaviti veliko bogatstvo.\nA ipak im ostaviti neriješene odnose.\nNeizgovorena očekivanja.\nI odgovornosti za koje nisu pripremljeni.\nAli možete im ostaviti i nešto mnogo vrjednije od samog kapitala.\nSposobnost da razumiju ono što su naslijedili.\nSlobodu da odluče što žele s time napraviti.\nI odgovornost da svojim odlukama ne ugroze budućnost onih koji dolaze nakon njih.\n*Imovina se može naslijediti. Ali sposobnost da se njome odgovorno upravlja mora se izgraditi.*\nKontinuitet se ne događa.\n*On se gradi.*"}]}</script>
+<script>
+/* ako nešto pukne, pokaži grešku na ekranu (da se može poslati snimka) */
+window.addEventListener('error', e => { try{ const d = document.createElement('div'); d.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:99;background:#b00020;color:#fff;font:13px system-ui;padding:8px 10px;border-radius:8px'; d.textContent = 'Greška: ' + e.message + ' (red ' + e.lineno + ')'; document.body.appendChild(d); }catch(_){} });
+(function(){
+const $ = id => document.getElementById(id);
+const SAMPLE = `Dobar dan i dobro došli! Ovo je primjer teksta – obriši ga i zalijepi svoj.
+
+Dodirni ekran da tekst krene. Dodirni ponovno da stane. Prstom ga možeš i ručno povući gore ili dolje.
+
+[pauza – pogled u kameru]
+
+Gumbima minus i plus mijenjaš brzinu, a gumbima A minus i A plus veličinu slova. Sve to možeš mijenjati i dok čitaš.
+
+Ako mobitel staviš u pravi prompter sa staklom, uključi zrcalo i tekst će se u staklu vidjeti ispravno.
+
+Hvala što ste gledali, vidimo se u sljedećem videu!`;
+
+const DEF = {speed:5, size:48, lh:1.35, margin:6, linePos:30, countdown:5, theme:'white', align:'left', line:true, mirrorX:false, mirrorY:false, dimRead:true, pinCtl:true, slowSec:true};
+function read(k, d){ try{ const v = localStorage.getItem(k); return v == null ? d : v; }catch(e){ return d; } }
+function write(k, v){ try{ localStorage.setItem(k, v); }catch(e){} }
+let S = Object.assign({}, DEF);
+try{ Object.assign(S, JSON.parse(read('prompter.settings','{}')) || {}); }catch(e){}
+const save = () => write('prompter.settings', JSON.stringify(S));
+if (read('prompter.cd5', '') !== '1'){ S.countdown = 5; save(); write('prompter.cd5', '1'); }   /* 26.11.: odbrojavanje od 5 */
+
+const ta = $('script');
+
+/* ---------- Mape i tekstovi ---------- */
+const uid = () => Math.random().toString(36).slice(2, 9);
+let L = null;
+try{ L = JSON.parse(read('prompter.lib', 'null')); }catch(e){}
+if (!L || !Array.isArray(L.folders) || !L.folders.length){
+  const t = {id:uid(), name:'Tekst 1', body:read('prompter.text', SAMPLE)};
+  const f = {id:uid(), name:'Video 1', texts:[t]};
+  L = {folders:[f], f:f.id, t:t.id};
+}
+/* ugrađeni tekstovi: dodaju se jednom (po verziji); njezine izmjene i brisanja se ne diraju */
+/* BOLD = rečenice podebljane u Danijelovim dokumentima: podebljaju se i kad u tekstu nema zvjezdica (npr. ručno zalijepljen tekst) */
+const BOLD = new Set();
+const norm = s => s.replace(/\*/g, '').replace(/[\u00a0\u2009\u202f\s]+/g, ' ').replace(/[“”„]/g, '"').replace(/[‘’]/g, "'").trim();
+/* označi podebljane rečenice gdje god se nalaze u redu (i usred dužeg odlomka) */
+function markBold(l){
+  if (l.indexOf('*') >= 0) return l;
+  let n = l.replace(/[\u00a0\u2009\u202f\s]+/g, ' ');
+  const cmp = norm(n);
+  BOLD.forEach(s => { if (cmp.indexOf(s) < 0) return;
+    const re = new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/"/g, '["“”„]').replace(/'/g, "['‘’]"));
+    n = n.replace(re, m => '*' + m + '*'); });
+  return n;
+}
+function countBold(t){ return t.split('\n').reduce((a, l) => a + (markBold(l.trim()).match(/\*[^*]+\*/g) || []).length, 0); }
+(function seed(){
+  let data = []; try{ data = JSON.parse(document.getElementById('seed').textContent); }catch(e){ return; }
+  data.texts.forEach(t => t.body.split('\n').forEach(l => { const m = l.trim().match(/^\*(.+)\*$/); if (m) BOLD.add(norm(m[1])); }));
+  const V = data.v, done = read('prompter.seed', '');
+  if (done === V) return;
+  let f = L.folders.find(x => x.id === data.folder.id);
+  if (!f){ f = {id:data.folder.id, name:data.folder.name, texts:[]}; L.folders.unshift(f); }
+  data.texts.forEach(t => { const o = f.texts.find(x => x.id === t.id);
+    if (!o) f.texts.push({id:t.id, name:t.name, body:t.body});
+    else if (o.body.indexOf('*') < 0 || o.body.indexOf('## HOOK') >= 0 || o.body.indexOf('## ODJAVA') >= 0) o.body = t.body; });   /* stari oblik (bez zvjezdica ili s HOOK/NASLOV) -> novi */
+  L.f = f.id; L.t = (f.texts[0] || {}).id;
+  write('prompter.seed', V); write('prompter.lib', JSON.stringify(L));
+})();
+let tLib;
+function saveLib(now){ clearTimeout(tLib); const w = () => write('prompter.lib', JSON.stringify(L)); if (now) w(); else tLib = setTimeout(w, 300); }
+function curF(){ let f = L.folders.find(x => x.id === L.f); if (!f){ f = L.folders[0]; L.f = f.id; } return f; }
+function curT(){ const f = curF(); if (!f.texts.length) f.texts.push({id:uid(), name:'Tekst 1', body:''});
+  let t = f.texts.find(x => x.id === L.t); if (!t){ t = f.texts[0]; L.t = t.id; } return t; }
+function chip(label, cls, fn){ const b = document.createElement('button'); b.type = 'button'; b.className = 'chip ' + cls; b.textContent = label; b.addEventListener('click', fn); return b; }
+function renderChips(){
+  const fBox = $('folders'), tBox = $('texts'), F = curF(), T = curT();
+  fBox.replaceChildren(...L.folders.map(f => chip(f.name || 'Bez imena', f.id === F.id ? 'cur' : '', () => { L.f = f.id; L.t = (f.texts[0]||{}).id; saveLib(true); renderLib(); })),
+    chip('+ Nova mapa', 'add', () => {
+      const t = {id:uid(), name:'Tekst 1', body:''}, f = {id:uid(), name:'Video ' + (L.folders.length + 1), texts:[t]};
+      L.folders.push(f); L.f = f.id; L.t = t.id; saveLib(true); renderLib(); $('fname').focus(); $('fname').select(); }));
+  tBox.replaceChildren(...F.texts.map(t => chip(t.name || 'Bez imena', t.id === T.id ? 'cur' : '', () => { L.t = t.id; saveLib(true); renderLib(); })),
+    chip('+ Novi tekst', 'add', () => {
+      const t = {id:uid(), name:'Tekst ' + (F.texts.length + 1), body:''};
+      F.texts.push(t); L.t = t.id; saveLib(true); renderLib(); ta.focus(); }));
+}
+function renderLib(){
+  const F = curF(), T = curT();
+  $('fname').value = F.name; $('tname').value = T.name;
+  ta.value = T.body; renderChips(); updateEst();
+  disarm($('fdel')); disarm($('tdel'));
+}
+$('fname').addEventListener('input', e => { curF().name = e.target.value; saveLib(); renderChips(); });
+$('tname').addEventListener('input', e => { curT().name = e.target.value; saveLib(); renderChips(); });
+
+/* brisanje u dva dodira: prvi pita, drugi briše */
+const LBL = {fdel:'Obriši mapu', tdel:'Obriši tekst'};
+function disarm(b){ clearTimeout(b._t); b.classList.remove('armed'); b.textContent = LBL[b.id]; }
+function armed(b){ if (b.classList.contains('armed')){ disarm(b); return true; }
+  b.classList.add('armed'); b.textContent = 'Dodirni opet za brisanje'; b._t = setTimeout(() => disarm(b), 3000); return false; }
+$('fdel').addEventListener('click', e => {
+  if (!armed(e.currentTarget)) return;
+  L.folders = L.folders.filter(f => f.id !== L.f);
+  if (!L.folders.length) L.folders.push({id:uid(), name:'Video 1', texts:[{id:uid(), name:'Tekst 1', body:''}]});
+  L.f = L.folders[0].id; L.t = null; saveLib(true); renderLib();
+});
+$('tdel').addEventListener('click', e => {
+  if (!armed(e.currentTarget)) return;
+  const F = curF(); F.texts = F.texts.filter(t => t.id !== L.t); L.t = null; saveLib(true); renderLib();
+});
+
+/* ---------- Urednik ---------- */
+const FMT = {
+  speed: v => String(v).replace('.', ','),
+  size: v => v + ' px',
+  lh: v => Number(v).toFixed(2).replace('.', ','),
+  margin: v => v + ' %',
+  linePos: v => v + ' % od vrha',
+  countdown: v => v == 0 ? 'bez' : v + ' s'
+};
+Object.keys(FMT).forEach(k => {
+  const el = $(k), out = $('o-' + k);
+  el.value = S[k]; out.textContent = FMT[k](S[k]);
+  el.addEventListener('input', () => { S[k] = Number(el.value); out.textContent = FMT[k](S[k]); save(); updatePreview(); });
+});
+['line','mirrorX','mirrorY','dimRead','slowSec'].forEach(k => {
+  const el = $(k); el.checked = !!S[k];
+  el.addEventListener('change', () => { S[k] = el.checked; save(); });
+});
+['theme','align'].forEach(name => {
+  document.querySelectorAll(`input[name=${name}]`).forEach(r => {
+    r.checked = r.value === S[name];
+    r.addEventListener('change', () => { if (r.checked){ S[name] = r.value; save(); updatePreview(); } });
+  });
+});
+
+function words(t){ return (t.replace(/^##.*$/gm,' ').replace(/\[[^\]]*\]/g,' ').replace(/\*/g,'').match(/\S+/g) || []).length; }
+function mmss(s){ s = Math.max(0, Math.round(s)); return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); }
+function updateEst(){
+  const w = words(ta.value);
+  $('est').textContent = w + ' riječi · oko ' + mmss(w / 140 * 60) + ' čitanja · ' + countBold(ta.value) + ' podebljanih';
+}
+ta.addEventListener('input', () => { curT().body = ta.value; updateEst(); saveLib(); });
+$('clear').addEventListener('click', () => { ta.value = ''; curT().body = ''; saveLib(true); updateEst(); ta.focus(); });
+$('sample').addEventListener('click', () => { ta.value = SAMPLE; curT().body = SAMPLE; saveLib(true); updateEst(); });
+renderLib();
+
+const THEME = {white:['--st-black','--st-white','--accent'], yellow:['--st-black','--st-yellow','--st-white'], paper:['--st-paper','--st-ink','--st-cue-dark']};
+function updatePreview(){
+  const p = $('preview'), t = THEME[S.theme] || THEME.white;
+  p.style.background = `var(${t[0]})`; p.style.color = `var(${t[1]})`;
+  p.style.setProperty('--p-cue', `var(${t[2]})`);
+  p.style.fontSize = Math.min(S.size, 72) + 'px';
+  p.style.lineHeight = S.lh; p.style.fontWeight = 400; p.style.textAlign = S.align;
+}
+document.querySelector('#preview .cue').style.cssText = 'color:var(--p-cue);font-weight:400;font-size:.62em';
+updateEst(); updatePreview();
+
+/* ---------- Pozornica ---------- */
+const stage = $('stage'), mirror = $('mirror'), scroller = $('scroller'), textEl = $('text'), readline = $('readline');
+let pos = 0, maxPos = 1, playing = false, raf = 0, last = 0, wake = null, hideT = 0, cdT = 0;
+
+function esc(s){ return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+let SECS = [];
+function inline(s){ return esc(s).replace(/\*([^*]+)\*/g, '<span class="em">$1</span>').replace(/\[([^\]]+)\]/g, '<span class="cue">[$1]</span>'); }
+function renderText(){
+  const lines = ta.value.trim().split('\n');
+  let out = '', first = true, gap = false;
+  for (const raw of lines){
+    const l = raw.trim();
+    if (!l){ gap = true; continue; }
+    const m = l.match(/^##\s*(.*)$/);
+    if (m){ if (gap && !first) out += '<div class="gap"></div>'; out += '<div class="sec' + (first ? ' first' : '') + '">' + esc(m[1]) + '</div>'; gap = false; }
+    else { if (gap && !first) out += '<div class="gap"></div>';
+      out += '<div class="ln">' + renderLine(markBold(l)) + '</div>'; gap = false; }
+    first = false;
+  }
+  textEl.innerHTML = out || '<div class="ln">(Nema teksta – vrati se i upiši ga.)</div>';
+  WORDS = [...textEl.querySelectorAll('.w')].map(el => ({n: normW(el.textContent), el}));
+}
+/* svaka riječ u svom <span class="w"> – da glas zna gdje je koja riječ */
+function wordsHTML(s){ return s.split(/(\s+)/).map(t => (!t || /^\s+$/.test(t)) ? t : '<span class="w">' + esc(t) + '</span>').join(''); }
+function renderLine(l){
+  let out = '', last = 0, m; const re = /\*([^*]+)\*|\[([^\]]+)\]/g;
+  while ((m = re.exec(l))){
+    out += wordsHTML(l.slice(last, m.index));
+    out += m[1] != null ? '<span class="em">' + wordsHTML(m[1]) + '</span>' : '<span class="cue">[' + esc(m[2]) + ']</span>';
+    last = re.lastIndex;
+  }
+  return out + wordsHTML(l.slice(last));
+}
+function measureSecs(){ const o = textEl.offsetTop; SECS = [...textEl.querySelectorAll('.sec')].map(e => ({y:e.offsetTop - o, name:e.textContent})); }
+function pps(){ return S.speed * 12 * (S.size / 48); }
+
+function layout(keep){
+  const ratio = keep ? pos / maxPos : 0;
+  const H = stage.clientHeight;
+  stage.className = 't-' + S.theme + (stage.classList.contains('hide-ctl') ? ' hide-ctl' : '');
+  textEl.style.setProperty('--p-size', S.size + 'px');
+  textEl.style.setProperty('--p-lh', S.lh);
+  textEl.style.setProperty('--p-margin', S.margin + 'vw');
+  textEl.style.textAlign = S.align;
+  const lineY = H * S.linePos / 100;
+  readline.style.top = lineY + 'px';
+  readline.hidden = !S.line;
+  scroller.style.paddingTop = Math.max(0, lineY - S.size * S.lh / 2) + 'px';
+  scroller.style.paddingBottom = H + 'px';
+  const dim = $('dim'); dim.hidden = !S.dimRead; dim.style.height = Math.max(0, lineY - S.size * S.lh * 0.55) + 'px';
+  $('pin').classList.toggle('on', !!S.pinCtl);
+  mirror.style.transform = `scale(${S.mirrorX ? -1 : 1}, ${S.mirrorY ? -1 : 1})`;
+  maxPos = Math.max(1, textEl.offsetHeight);
+  pos = keep ? ratio * maxPos : pos;
+  measureSecs(); lastSec = null; drawTicks();
+  if (vOn && vCur >= 0){ vTarget = wordY(vCur); pos = vTarget; }
+  $('v-speed').textContent = FMT.speed(S.speed);
+  $('v-size').textContent = S.size;
+  $('v-margin').textContent = S.margin + ' %';
+  $('mir').classList.toggle('on', S.mirrorX);
+  apply();
+}
+let lastTime = '', lastSec = null;
+function apply(){
+  pos = Math.min(Math.max(pos, 0), maxPos);
+  scroller.style.transform = `translate3d(0, ${-pos}px, 0)`;
+  $('bar').style.width = (pos / maxPos * 100) + '%';
+  $('thumb').style.top = (pos / maxPos * 100) + '%';
+  let s = ''; for (const x of SECS){ if (x.y <= pos + S.size * S.lh) s = x.name; else break; }
+  if (s !== lastSec){ $('sec').textContent = s; $('sec').hidden = !s; lastSec = s; }
+  const t = 'još ' + mmss((maxPos - pos) / pps());
+  if (t !== lastTime){ $('time').textContent = t; lastTime = t; }
+}
+/* usporavanje oko žute crte (nove teme): 2 reda prije do 1,5 reda poslije = pola brzine, s blagim prijelazom od 1 reda */
+function slowF(){
+  if (!S.slowSec || !SECS.length) return 1;
+  const H = S.size * S.lh, here = pos + H / 2; let f = 1;
+  for (const x of SECS){
+    const d = x.y - here;                 // >0: crta je još ispod linije za čitanje
+    let k = 0;
+    if (d <= 2 * H && d >= -1.5 * H) k = 1;
+    else if (d > 2 * H && d < 3 * H) k = 3 - d / H;
+    else if (d < -1.5 * H && d > -2.5 * H) k = 2.5 + d / H;
+    f = Math.min(f, 1 - 0.5 * k);
+  }
+  return f;
+}
+function tick(t){
+  if (!playing){ raf = 0; return; }
+  const dt = Math.min(0.1, (t - last) / 1000); last = t;
+  pos += pps() * dt * slowF();
+  if (pos >= maxPos){ pos = maxPos; apply(); setPlaying(false); return; }
+  apply();
+  raf = requestAnimationFrame(tick);
+}
+function setPlaying(p){
+  playing = p;
+  $('ic-play').hidden = p; $('ic-pause').hidden = !p;
+  if (p && vOn) vEnd('');
+  if (p){ if (pos >= maxPos) pos = 0; last = performance.now(); if (!raf) raf = requestAnimationFrame(tick); flashCtl(); }
+  else { showCtl(true); }
+}
+function cancelCount(){ clearInterval(cdT); cdT = 0; $('count').hidden = true; }
+function toggle(){
+  if (cdT){ cancelCount(); setPlaying(true); return; }   /* gumb za vrijeme odbrojavanja = kreni odmah */
+  if (playing){ setPlaying(false); return; }
+  if (pos === 0 && S.countdown > 0) countdown(); else setPlaying(true);
+}
+function countdown(){
+  let n = S.countdown; const c = $('count');
+  c.hidden = false; c.textContent = n; showCtl(false);
+  cdT = setInterval(() => { n--; if (n <= 0){ cancelCount(); setPlaying(true); } else c.textContent = n; }, 1000);
+}
+function showCtl(stay){ stage.classList.remove('hide-ctl'); clearTimeout(hideT); if (!stay && !S.pinCtl) hideT = setTimeout(() => { if (playing || cdT) stage.classList.add('hide-ctl'); }, 2500); }
+function flashCtl(){ showCtl(false); }
+
+async function lockWake(){ try{ if ('wakeLock' in navigator) wake = await navigator.wakeLock.request('screen'); }catch(e){ wake = null; } }
+document.addEventListener('visibilitychange', () => { if (!stage.hidden && document.visibilityState === 'visible') lockWake(); });
+
+function enter(){
+  curT().body = ta.value; saveLib(true);
+  renderText();
+  $('editor').hidden = true; stage.hidden = false;
+  pos = 0; layout(false); showCtl(true);
+  lockWake();
+  try{ const r = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); if (r && r.catch) r.catch(()=>{}); }catch(e){}
+  if (S.countdown > 0) countdown(); else setPlaying(true);
+}
+function exit(){
+  cancelCount(); setPlaying(false); vEnd('');
+  stage.hidden = true; $('editor').hidden = false;
+  try{ wake && wake.release(); }catch(e){} wake = null;
+  try{ if (document.fullscreenElement) document.exitFullscreen().catch(()=>{}); }catch(e){}
+  // vrati vrijednosti u urednik
+  ['speed','size','margin','mirrorX'].forEach(k => { const el = $(k); if (el.type === 'checkbox') el.checked = S[k]; else { el.value = S[k]; $('o-'+k).textContent = FMT[k](S[k]); } });
+  updatePreview();
+}
+$('start').addEventListener('click', enter);
+
+/* gumbi na pozornici */
+function on(id, fn, hold){ const b = $(id); let rT = 0, rI = 0, rep = false;
+  const stop = () => { clearTimeout(rT); clearInterval(rI); rT = rI = 0; };
+  b.addEventListener('pointerdown', e => { e.stopPropagation(); rep = false;
+    if (hold){ stop(); rT = setTimeout(() => { rep = true; rI = setInterval(() => { fn(); if (playing) flashCtl(); }, 140); }, 420); } });
+  ['pointerup','pointerleave','pointercancel'].forEach(ev => b.addEventListener(ev, e => { e.stopPropagation(); stop(); }));
+  b.addEventListener('click', e => { e.stopPropagation(); if (rep){ rep = false; return; } fn(); if (playing) flashCtl(); }); }
+const setSpeed = d => { S.speed = Math.min(20, Math.max(0.5, Math.round((S.speed + d) * 2) / 2)); save(); $('v-speed').textContent = FMT.speed(S.speed); lastTime=''; apply(); };
+const setSize = d => { S.size = Math.min(140, Math.max(20, S.size + d)); save(); layout(true); };
+on('play', toggle);
+on('exit', exit);
+on('top', () => { cancelCount(); setPlaying(false); pos = 0; apply(); });
+on('slower', () => setSpeed(-0.5), true);
+on('faster', () => setSpeed(0.5), true);
+on('smaller', () => setSize(-4), true);
+on('bigger', () => setSize(4), true);
+const setMargin = d => { S.margin = Math.min(30, Math.max(0, S.margin + d)); save(); layout(true); };
+on('narrower', () => setMargin(-1), true);
+on('wider', () => setMargin(1), true);
+/* traka desno: dodir ili povlačenje = skok na to mjesto u tekstu (tekst nastavlja ako je išao) */
+(function(){
+  const sc = $('scrub'); let drag = false;
+  const go = e => { const r = sc.getBoundingClientRect(); pos = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) * maxPos; apply(); manualMoved(); };
+  sc.addEventListener('pointerdown', e => { e.stopPropagation(); drag = true; try{ sc.setPointerCapture(e.pointerId); }catch(_){} go(e); });
+  sc.addEventListener('pointermove', e => { if (drag){ e.stopPropagation(); go(e); } });
+  ['pointerup','pointercancel'].forEach(ev => sc.addEventListener(ev, e => { e.stopPropagation(); drag = false; }));
+})();
+function drawTicks(){ $('ticks').innerHTML = SECS.map(x => '<div class="tick" style="top:' + (x.y / maxPos * 100) + '%"></div>').join(''); }
+on('pin', () => { S.pinCtl = !S.pinCtl; save(); $('pin').classList.toggle('on', S.pinCtl); showCtl(!playing); });
+on('mir', () => { S.mirrorX = !S.mirrorX; save(); layout(true); });
+
+/* dodir i povlačenje */
+let startY = null, startPos = 0, dragged = false;
+stage.addEventListener('pointerdown', e => { startY = e.clientY; startPos = pos; dragged = false; try{ stage.setPointerCapture(e.pointerId); }catch(_){} });
+stage.addEventListener('pointermove', e => {
+  if (startY === null) return;
+  const dy = e.clientY - startY;
+  if (!dragged && Math.abs(dy) > 8) dragged = true;
+  if (dragged){ pos = startPos - dy * (S.mirrorY ? -1 : 1); apply(); manualMoved(); }
+});
+/* dodir ekrana = sakrij / pokaži gumbe (tekst ide dalje); kreni/stani je žuti gumb */
+stage.addEventListener('pointerup', () => {
+  if (startY !== null && !dragged){
+    clearTimeout(hideT);
+    if (stage.classList.contains('hide-ctl')) showCtl(!playing); else stage.classList.add('hide-ctl');
+  }
+  startY = null; });
+stage.addEventListener('pointercancel', () => { startY = null; });
+stage.addEventListener('wheel', e => { e.preventDefault(); pos += e.deltaY; apply(); manualMoved(); }, {passive:false});
+
+/* tipkovnica / Bluetooth daljinski */
+document.addEventListener('keydown', e => {
+  if (stage.hidden) return;
+  const k = e.key; let used = true;
+  if (k === ' ' || k === 'Enter' || k === 'k') toggle();
+  else if (k === 'ArrowDown' || k === 'ArrowRight') setSpeed(0.5);
+  else if (k === 'ArrowUp' || k === 'ArrowLeft') setSpeed(-0.5);
+  else if (k === 'PageDown'){ pos += stage.clientHeight * 0.4; apply(); }
+  else if (k === 'PageUp'){ pos -= stage.clientHeight * 0.4; apply(); }
+  else if (k === 'Home'){ pos = 0; apply(); }
+  else if (k === 'Escape') exit();
+  else used = false;
+  if (used){ e.preventDefault(); flashCtl(); }
+});
+
+/* ---------- Glas: tekst prati govor ----------
+   Govor -> riječi (dictation iz Claudea, ili preglednikov SpeechRecognition) -> traži se gdje u tekstu
+   su zadnje izgovorene riječi -> tekst klizi tako da je ta riječ na liniji za čitanje. */
+let DICT = null;
+try{ if (window.claude && claude.use) claude.use('dictation').then(d => { if (!d) return; DICT = d;
+  d.onFinal(e => heard(e.text, true)); d.onPartial(e => heard(e.text, false)); d.onState(e => vState(e.state, e.reason)); }).catch(() => {}); }catch(_){}
+let WORDS = [];
+let vOn = false, vCur = -1, vTarget = 0, vRaf = 0, vLast = 0, FIN = [], PART = [], SR = null, vNoLang = false;
+function normW(s){ return s.toLowerCase().replace(/đ/g, 'd').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ''); }
+function toks(s){ return String(s || '').split(/\s+/).map(normW).filter(Boolean); }
+/* sličnost dviju riječi: ista = 1 (kratke 0,5), isti korijen (prva 4 slova, hrvatski padeži) = 0,8 */
+function sim(a, b){
+  if (!a || !b) return 0;
+  if (a === b) return a.length <= 2 ? 0.5 : 1;
+  if (a.length >= 4 && b.length >= 4 && a.slice(0, 4) === b.slice(0, 4) && Math.abs(a.length - b.length) <= 3) return 0.8;
+  return 0;
+}
+function wordY(i){ return WORDS[i].el.offsetTop - textEl.offsetTop; }
+function curFromPos(){ let i = 0; while (i < WORDS.length && wordY(i) < pos - 2) i++; vCur = i - 1; }
+function manualMoved(){ if (vOn){ curFromPos(); vTarget = pos; markSaid(); } }
+function heard(text, fin){
+  if (!vOn) return;
+  const w = toks(text);
+  if (fin){ FIN = FIN.concat(w).slice(-30); PART = []; } else PART = w;
+  const all = FIN.concat(PART); showHeard(all); align(all);
+}
+function align(all){
+  const Sp = all.slice(-7); if (!Sp.length || !WORDS.length) return;
+  const lo = Math.max(0, vCur - 3), hi = Math.min(WORDS.length - 1, vCur + 50);
+  let best = -1, bs = 0;
+  for (let j = lo; j <= hi; j++){
+    /* sidro = zadnja ili predzadnja izgovorena riječ (zadnja zna biti krivo prepoznata ili spojena/rastavljena) */
+    for (let a = Sp.length - 1; a >= Math.max(0, Sp.length - 2); a--){
+      let e = sim(Sp[a], WORDS[j].n);
+      if (!e && a > 0) e = sim(Sp[a - 1] + Sp[a], WORDS[j].n) * 0.9;     // „pre rizična" = „prerizična"
+      if (!e) continue;
+      let sc = e - (Sp.length - 1 - a) * 0.3, p = j - 1;
+      for (let i = a - 1; i >= 0 && p >= 0 && p >= j - 12; i--){
+        for (let q = p; q >= Math.max(0, p - 2); q--){ const v = sim(Sp[i], WORDS[q].n); if (v){ sc += v; p = q - 1; break; } }
+      }
+      const adj = sc - Math.abs(j - (vCur + 1)) * 0.02;
+      if (adj > bs){ bs = adj; best = j; }
+    }
+  }
+  const need = (best > vCur && best - vCur <= 4) ? 1.5 : 2.4;
+  if (best >= 0 && bs >= need && best !== vCur){ vCur = best; vTarget = wordY(best); vKick(); markSaid(); }
+}
+function vLoop(t){
+  if (!vOn){ vRaf = 0; return; }
+  const dt = Math.min(0.1, (t - vLast) / 1000); vLast = t;
+  const d = vTarget - pos;
+  if (Math.abs(d) > 0.5){ pos += d * Math.min(1, dt * 4); apply(); }
+  vRaf = requestAnimationFrame(vLoop);
+}
+/* kao Textream/PromptSmart: izgovorene riječi blijede, trenutna je podcrtana */
+let saidTo = -1, nowEl = null;
+function markSaid(){
+  const c = vOn ? vCur : -1;
+  if (c > saidTo) for (let i = saidTo + 1; i <= c; i++) WORDS[i].el.classList.add('said');
+  else for (let i = saidTo; i > c; i--) WORDS[i].el.classList.remove('said');
+  saidTo = c;
+  if (nowEl) nowEl.classList.remove('now');
+  nowEl = (vOn && c >= 0 && WORDS[c + 1]) ? WORDS[c + 1].el : null;
+  if (nowEl) nowEl.classList.add('now');
+}
+function showHeard(w){ if (vOn && w.length) vStatus('Čujem: … ' + w.slice(-4).join(' ')); }
+function vKick(){ if (!vRaf){ vLast = performance.now(); vRaf = requestAnimationFrame(vLoop); } }
+function vStatus(t, bad){ const e = $('vst'); e.textContent = t; e.hidden = !t; e.classList.toggle('bad', !!bad); }
+const VREASON = {not_granted:'Mikrofon nije dopušten', dismissed:'Mikrofon nije dopušten', unavailable:'Slušanje ovdje nije dostupno',
+  rate_limited:'Mikrofon je zauzet – pokušaj za čas', upstream_error:'Mikrofon je stao – dodirni ga ponovno', time_limit:'Prošlo je 60 min – dodirni mikrofon ponovno', hidden:'Mikrofon je stao – dodirni ga ponovno'};
+function vBegin(){
+  vOn = true; $('mic').classList.add('on'); cancelCount();
+  playing = false; $('ic-play').hidden = false; $('ic-pause').hidden = true;
+  FIN = []; PART = []; srText = ''; curFromPos(); vTarget = pos; vKick(); markSaid(); vStatus('Palim mikrofon…');
+}
+function vEnd(msg, bad){
+  const was = vOn; vOn = false; $('mic').classList.remove('on'); markSaid();
+  if (SR){ try{ SR.onend = null; SR.stop(); }catch(_){} SR = null; }
+  try{ if (DICT && DICT.active()) DICT.stop().catch(() => {}); }catch(_){}
+  if (was || msg) vStatus(msg || '', bad);
+}
+function vState(st, reason){
+  if (st === 'listening' && vOn) vStatus('Slušam – govori');
+  else if (st === 'idle' && vOn){
+    if (reason === 'unavailable' && !vNoLang){ vNoLang = true; vEnd('Hrvatski nije prepoznat – dodirni mikrofon još jednom', true); }
+    else vEnd(reason === 'stopped' || reason === 'viewer_stopped' ? '' : (VREASON[reason] || 'Mikrofon je isključen'), reason !== 'stopped' && reason !== 'viewer_stopped');
+  }
+}
+let srText = '';
+function micTap(){
+  if (vOn){ vEnd(''); return; }
+  const C = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let top = false; try{ top = window.top === window; }catch(_){}
+  if (C && (top || !DICT)) return srStart(C);      // samostalna stranica u Chromeu: Googleovo prepoznavanje (najbrže, dobar hrvatski)
+  if (DICT){
+    vBegin();
+    DICT.start(vNoLang ? {} : {language: 'hr'}).catch(e => {
+      const c = e && e.code;
+      if (c === 'unavailable' && !vNoLang){ vNoLang = true; vEnd('Hrvatski nije prepoznat – dodirni mikrofon još jednom', true); }
+      else if (vOn) vEnd(VREASON[c] || 'Mikrofon se nije upalio', true);
+    });
+    return;
+  }
+  vStatus('Slušanje radi u Chromeu – otvori prompter u Chromeu', true);
+}
+function srStart(C){
+  try{
+    SR = new C(); SR.lang = 'hr-HR'; SR.continuous = true; SR.interimResults = true; SR.maxAlternatives = 1;
+    SR.onresult = ev => {
+      let t = ''; for (let i = 0; i < ev.results.length; i++) t += ' ' + ev.results[i][0].transcript;
+      srText = t; const all = FIN.concat(toks(t)).slice(-14); showHeard(all); align(all);
+    };
+    SR.onerror = ev => { if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') vEnd('Mikrofon nije dopušten – u Chromeu dopusti mikrofon za ovu stranicu', true);
+      else if (ev.error === 'network') vStatus('Nema interneta – prepoznavanje govora treba internet', true); };
+    SR.onstart = () => { if (vOn) vStatus('Slušam – govori'); };
+    SR.onend = () => { FIN = FIN.concat(toks(srText)).slice(-30); srText = '';
+      if (vOn && SR){ setTimeout(() => { if (vOn && SR){ try{ SR.start(); }catch(_){} } }, 120); } };
+    vBegin(); SR.start();
+  }catch(e){ vEnd('Slušanje ovdje nije dostupno', true); }
+}
+on('mic', micTap);
+/* cijeli ekran: dodir = uđi / izađi */
+const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+function fsIcon(){ const f = !!fsEl(); $('ic-fs').hidden = f; $('ic-fsx').hidden = !f; $('fs').classList.toggle('on', f); }
+const FSMSG = 'Cijeli ekran ovdje nije dopušten – u Chromeu: ⋮ → Dodaj na početni zaslon';
+function fsFail(){ vStatus(FSMSG, true); setTimeout(() => { if ($('vst').textContent === FSMSG) vStatus(''); }, 7000); }
+function fsTap(){
+  const d = document.documentElement;
+  try{
+    if (fsEl()){ (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+    const r = (d.requestFullscreen || d.webkitRequestFullscreen).call(d);
+    if (r && r.catch) r.catch(fsFail);
+  }catch(e){ fsFail(); }
+}
+on('fs', fsTap);
+document.addEventListener('fullscreenchange', () => { fsIcon(); if (!stage.hidden) layout(true); });
+document.addEventListener('webkitfullscreenchange', fsIcon);
+window.addEventListener('resize', () => { if (!stage.hidden) layout(true); });
+})();
+</script>
+
+<script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});</script>
+</body></html>
