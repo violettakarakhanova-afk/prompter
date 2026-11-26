@@ -154,7 +154,7 @@ textarea{width:100%;min-height:42vh;resize:vertical;background:var(--panel);bord
   <div class="wrap">
     <header>
       <h1><span class="tally"></span>Moj prompter</h1>
-      <div class="est"><span id="est"></span><span class="ver">verzija 26.11. (24)</span></div>
+      <div class="est"><span id="est"></span><span class="ver">verzija 26.11. (25)</span></div>
     </header>
 
     <section>
@@ -225,6 +225,12 @@ textarea{width:100%;min-height:42vh;resize:vertical;background:var(--panel);bord
           <div class="seg" role="radiogroup" aria-label="Model govora">
             <label><input type="radio" name="wmodel" value="tiny">Brže</label>
             <label><input type="radio" name="wmodel" value="base">Točnije</label>
+          </div></div>
+        <div class="set"><span>Prepoznavanje radi na<small style="display:block;color:var(--muted);font-weight:400">Automatski isproba što je brže na tvom mobitelu.</small></span><span></span>
+          <div class="seg" role="radiogroup" aria-label="Gdje radi prepoznavanje">
+            <label><input type="radio" name="wdev" value="auto">Automatski</label>
+            <label><input type="radio" name="wdev" value="cpu">Procesor</label>
+            <label><input type="radio" name="wdev" value="gpu">Grafički čip</label>
           </div></div>
         <div class="set"><label class="toggle" style="grid-column:1/-1">
           <span>Zrcalo lijevo–desno<small>Za staklo profesionalnog promptera ispred kamere</small></span><input type="checkbox" id="mirrorX"></label></div>
@@ -324,7 +330,7 @@ Ako mobitel staviš u pravi prompter sa staklom, uključi zrcalo i tekst će se 
 
 Hvala što ste gledali, vidimo se u sljedećem videu!`;
 
-const DEF = {speed:5, size:48, lh:1.35, margin:6, linePos:30, countdown:5, theme:'white', align:'left', line:true, mirrorX:false, mirrorY:false, dimRead:true, pinCtl:true, slowSec:true, voiceAuto:true, vmode:'words', wmodel:'tiny'};
+const DEF = {speed:5, size:48, lh:1.35, margin:6, linePos:30, countdown:5, theme:'white', align:'left', line:true, mirrorX:false, mirrorY:false, dimRead:true, pinCtl:true, slowSec:true, voiceAuto:true, vmode:'words', wmodel:'tiny', wdev:'auto'};
 function read(k, d){ try{ const v = localStorage.getItem(k); return v == null ? d : v; }catch(e){ return d; } }
 function write(k, v){ try{ localStorage.setItem(k, v); }catch(e){} }
 let S = Object.assign({}, DEF);
@@ -431,7 +437,7 @@ Object.keys(FMT).forEach(k => {
   const el = $(k); el.checked = !!S[k];
   el.addEventListener('change', () => { S[k] = el.checked; save(); });
 });
-['theme','align','vmode','wmodel'].forEach(name => {
+['theme','align','vmode','wmodel','wdev'].forEach(name => {
   document.querySelectorAll(`input[name=${name}]`).forEach(r => {
     r.checked = r.value === S[name];
     r.addEventListener('change', () => { if (r.checked){ S[name] = r.value; save(); updatePreview(); } });
@@ -855,7 +861,7 @@ function srTapWake(){ if (vOn && SRC && srState !== 'on'){ srNeedTap = false; sr
 let aMode = false, AC = null, AST = null, APROC = null, aRaf = 0, aLast = 0, aTimer = 0, aRate = 16000;
 let RING = new Float32Array(16000 * 8), RW = 0, vadFloor = 0.003, vadLast = -1e9, speakAcc = 0, M = 0, debt = 0, rate = 1, aUseW = false;
 let WK = null, wReady = false, wBusy = false, wModel = '', wLastRun = 0, wId = 0, wJob = null, wPrev = null, wErr = false;
-let wRef = null, wLat = 2, wDev = '', wHits = 0, wRuns = 0, wEmpty = 0;
+let wBench = null, wRef = null, wLat = 2, wDev = '', wHits = 0, wRuns = 0, wEmpty = 0;
 function aStart(useW){
   vBegin(); aMode = true; aUseW = useW; M = pos; debt = 0; speakAcc = 0; rate = 1; wPrev = null; vadLast = -1e9; wRef = {y: pos, acc: 0}; wHits = 0; wRuns = 0;
   try{ AC = new (window.AudioContext || window.webkitAudioContext)({sampleRate: 16000}); }catch(_){ try{ AC = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ AC = null; } }
@@ -936,21 +942,25 @@ env.allowLocalModels = false;
 const TH = self.crossOriginIsolated ? Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1)) : 1;
 try{ env.backends.onnx.wasm.numThreads = TH; }catch(_){}
 let asr = null, dev = 'wasm';
-const OPT = { language: 'croatian', task: 'transcribe', max_new_tokens: 32, no_repeat_ngram_size: 3 };
+const OPT = { language: 'croatian', task: 'transcribe', max_new_tokens: 28, no_repeat_ngram_size: 3 };
+const files = {};
+const prog = p => { if (p && p.status === 'progress' && p.file){ files[p.file] = [p.loaded || 0, p.total || 0]; let l = 0, t = 0; for (const k in files){ l += files[k][0]; t += files[k][1]; } self.postMessage({type: 'progress', pct: t ? Math.round(l / t * 100) : 0}); } };
+/* koliko traje jedno prepoznavanje (prvo je uvijek sporije – mjeri se drugo) */
+async function bench(a, what){ self.postMessage({type: 'bench', what}); const x = new Float32Array(16000 * 3); try{ await a(x, OPT); }catch(_){ return 1e9; } const t0 = performance.now(); try{ await a(x, OPT); }catch(_){ return 1e9; } return performance.now() - t0; }
+async function mkCpu(model){ return pipeline('automatic-speech-recognition', model, { dtype: 'q8', device: 'wasm', progress_callback: prog }); }
+async function mkGpu(model){ if (!(self.navigator && navigator.gpu)) return null; const ad = await navigator.gpu.requestAdapter(); if (!ad) return null;
+  return pipeline('automatic-speech-recognition', model, { device: 'webgpu', dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' }, progress_callback: prog }); }
 self.onmessage = async e => { const m = e.data;
   if (m.type === 'load'){
-    const files = {};
-    const prog = p => { if (p && p.status === 'progress' && p.file){ files[p.file] = [p.loaded || 0, p.total || 0]; let l = 0, t = 0; for (const k in files){ l += files[k][0]; t += files[k][1]; } self.postMessage({type: 'progress', pct: t ? Math.round(l / t * 100) : 0}); } };
-    let ok = false;
-    if (m.gpu && self.navigator && navigator.gpu){
-      try{ const ad = await navigator.gpu.requestAdapter();
-        if (ad){ asr = await pipeline('automatic-speech-recognition', m.model, { device: 'webgpu', dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' }, progress_callback: prog });
-          await asr(new Float32Array(16000), { ...OPT, max_new_tokens: 4 }); dev = 'webgpu'; ok = true; } }catch(err){ asr = null; }
-    }
-    if (!ok){ try{ asr = await pipeline('automatic-speech-recognition', m.model, { dtype: 'q8', device: 'wasm', progress_callback: prog }); dev = 'wasm'; }
-      catch(err){ self.postMessage({type: 'error', msg: String(err && err.message || err)}); return; } }
-    const t0 = performance.now(); try{ await asr(new Float32Array(16000 * 3), OPT); }catch(_){}
-    self.postMessage({type: 'ready', dev, th: TH, ms: Math.round(performance.now() - t0)});
+    let cpu = null, gpu = null, tc = 0, tg = 0;
+    try{
+      if (m.dev !== 'gpu'){ cpu = await mkCpu(m.model); tc = await bench(cpu, 'procesor'); }
+      if (m.dev === 'gpu' || (m.dev !== 'cpu' && tc > 1300)){ try{ gpu = await mkGpu(m.model); if (gpu) tg = await bench(gpu, 'grafički čip'); }catch(_){ gpu = null; } }
+      if (!cpu && (!gpu || tg >= 1e9)){ gpu = null; cpu = await mkCpu(m.model); tc = await bench(cpu, 'procesor'); }
+    }catch(err){ self.postMessage({type: 'error', msg: String(err && err.message || err)}); return; }
+    if (gpu && tg < 1e9 && (!cpu || tg < tc * 0.8)){ asr = gpu; dev = 'webgpu'; try{ cpu && cpu.dispose && cpu.dispose(); }catch(_){} }
+    else { asr = cpu; dev = 'wasm'; try{ gpu && gpu.dispose && gpu.dispose(); }catch(_){} }
+    self.postMessage({type: 'ready', dev, th: TH, ms: Math.round(dev === 'webgpu' ? tg : tc), tc: Math.round(tc), tg: Math.round(tg)});
   }
   if (m.type === 'run'){ const t0 = performance.now();
     try{ const out = await asr(m.audio, OPT); self.postMessage({type: 'text', id: m.id, text: out.text || '', ms: performance.now() - t0}); }
@@ -958,20 +968,22 @@ self.onmessage = async e => { const m = e.data;
 };`;
 function wLoad(){
   const model = S.wmodel === 'base' ? 'onnx-community/whisper-base' : 'onnx-community/whisper-tiny';
-  if (WK && wModel === model){ if (wReady){ wRef = {y: M, acc: speakAcc}; vStatus('Slušam – pratim riječi (' + wDev + ')'); } return; }
+  const key = model + '|' + (S.wdev || 'auto');
+  if (WK && wModel === key){ if (wReady){ wRef = {y: M, acc: speakAcc}; vStatus('Slušam – pratim riječi (' + wDev + ')'); } return; }
   try{ if (WK) WK.terminate(); }catch(_){}
-  wReady = false; wBusy = false; wErr = false; wModel = model;
+  wReady = false; wBusy = false; wErr = false; wModel = key;
   try{
     WK = new Worker(URL.createObjectURL(new Blob([WCODE], {type: 'text/javascript'})), {type: 'module'});
   }catch(e){ wErr = true; vStatus('Praćenje riječi ovdje ne radi – tekst ide dok govoriš', true); return; }
   WK.onmessage = e => { const m = e.data;
     if (m.type === 'progress'){ if (aMode && !wReady) vStatus('Preuzimam prepoznavanje govora ' + m.pct + ' % (samo prvi put) – tekst već ide dok govoriš'); }
-    else if (m.type === 'ready'){ wReady = true; wDev = m.dev === 'webgpu' ? 'grafički čip' : (m.th > 1 ? m.th + ' jezgre' : '1 jezgra'); wLat = Math.max(0.5, (m.ms || 2000) / 1000); wRef = {y: M, acc: speakAcc}; if (aMode) vStatus('Slušam – pratim riječi (' + wDev + ', ' + wLat.toFixed(1).replace('.', ',') + ' s)'); }
+    else if (m.type === 'ready'){ wReady = true; wDev = (m.dev === 'webgpu' ? 'grafički čip' : 'procesor') + ', ' + (m.th > 1 ? m.th + ' jezgre' : '1 jezgra'); wBench = m; wLat = Math.max(0.5, (m.ms || 2000) / 1000); wRef = {y: M, acc: speakAcc}; if (aMode){ const f = x => (x / 1000).toFixed(1).replace('.', ',') + ' s'; vStatus('Slušam – pratim riječi · ' + wDev + (m.tc ? ' · procesor ' + f(m.tc) : '') + (m.tg ? ' · čip ' + f(m.tg) : '')); } }
+    else if (m.type === 'bench'){ if (aMode && !wReady) vStatus('Isprobavam brzinu: ' + m.what + '… (samo prvi put, tekst već ide dok govoriš)'); }
     else if (m.type === 'error'){ wErr = true; WK = null; wModel = ''; if (aMode) vStatus('Praćenje riječi se nije učitalo (internet?) – tekst ide dok govoriš', true); }
     else if (m.type === 'text') wText(m);
   };
   WK.onerror = () => { wErr = true; WK = null; wModel = ''; if (aMode) vStatus('Praćenje riječi ne radi – tekst ide dok govoriš', true); };
-  WK.postMessage({type: 'load', model, gpu: true});
+  WK.postMessage({type: 'load', model, dev: S.wdev || 'auto'});
 }
 /* svakih ~1 s, dok govoriš: zadnje 4 s zvuka -> Whisper */
 function wTick(){
