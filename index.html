@@ -150,7 +150,7 @@ textarea{width:100%;min-height:42vh;resize:vertical;background:var(--panel);bord
   <div class="wrap">
     <header>
       <h1><span class="tally"></span>Moj prompter</h1>
-      <div class="est"><span id="est"></span><span class="ver">verzija 26.11. (19)</span></div>
+      <div class="est"><span id="est"></span><span class="ver">verzija 26.11. (21)</span></div>
     </header>
 
     <section>
@@ -209,6 +209,8 @@ textarea{width:100%;min-height:42vh;resize:vertical;background:var(--panel);bord
           <span>Zatamni pročitano<small>Tekst iznad linije je bljeđi, oko ostaje na sljedećoj rečenici</small></span><input type="checkbox" id="dimRead"></label></div>
         <div class="set"><label class="toggle" style="grid-column:1/-1">
           <span>Uspori kod nove teme<small>Oko žute crte tekst ide upola sporije – vrijeme za pauzu i pogled u kameru</small></span><input type="checkbox" id="slowSec"></label></div>
+        <div class="set"><label class="toggle" style="grid-column:1/-1">
+          <span>Mikrofon se pali sam<small>Na „Kreni čitati" odmah sluša – tekst kreće kad počneš govoriti. Isključeno = tekst ide sam zadanom brzinom</small></span><input type="checkbox" id="voiceAuto"></label></div>
         <div class="set"><label class="toggle" style="grid-column:1/-1">
           <span>Zrcalo lijevo–desno<small>Za staklo profesionalnog promptera ispred kamere</small></span><input type="checkbox" id="mirrorX"></label></div>
         <div class="set"><label class="toggle" style="grid-column:1/-1">
@@ -307,7 +309,7 @@ Ako mobitel staviš u pravi prompter sa staklom, uključi zrcalo i tekst će se 
 
 Hvala što ste gledali, vidimo se u sljedećem videu!`;
 
-const DEF = {speed:5, size:48, lh:1.35, margin:6, linePos:30, countdown:5, theme:'white', align:'left', line:true, mirrorX:false, mirrorY:false, dimRead:true, pinCtl:true, slowSec:true};
+const DEF = {speed:5, size:48, lh:1.35, margin:6, linePos:30, countdown:5, theme:'white', align:'left', line:true, mirrorX:false, mirrorY:false, dimRead:true, pinCtl:true, slowSec:true, voiceAuto:true};
 function read(k, d){ try{ const v = localStorage.getItem(k); return v == null ? d : v; }catch(e){ return d; } }
 function write(k, v){ try{ localStorage.setItem(k, v); }catch(e){} }
 let S = Object.assign({}, DEF);
@@ -410,7 +412,7 @@ Object.keys(FMT).forEach(k => {
   el.value = S[k]; out.textContent = FMT[k](S[k]);
   el.addEventListener('input', () => { S[k] = Number(el.value); out.textContent = FMT[k](S[k]); save(); updatePreview(); });
 });
-['line','mirrorX','mirrorY','dimRead','slowSec'].forEach(k => {
+['line','mirrorX','mirrorY','dimRead','slowSec','voiceAuto'].forEach(k => {
   const el = $(k); el.checked = !!S[k];
   el.addEventListener('change', () => { S[k] = el.checked; save(); });
 });
@@ -570,7 +572,9 @@ function enter(){
   pos = 0; layout(false); showCtl(true);
   lockWake();
   try{ const r = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); if (r && r.catch) r.catch(()=>{}); }catch(e){}
-  if (S.countdown > 0) countdown(); else setPlaying(true);
+  const canVoice = !!(window.SpeechRecognition || window.webkitSpeechRecognition || DICT);
+  if (S.voiceAuto && canVoice) micTap();          // klik na „Kreni čitati" je dodir -> mobitel smije upaliti mikrofon
+  else if (S.countdown > 0) countdown(); else setPlaying(true);
 }
 function exit(){
   cancelCount(); setPlaying(false); vEnd('');
@@ -626,6 +630,7 @@ stage.addEventListener('pointermove', e => {
 /* dodir ekrana = sakrij / pokaži gumbe (tekst ide dalje); kreni/stani je žuti gumb */
 stage.addEventListener('pointerup', () => {
   if (startY !== null && !dragged){
+    if (srTapWake()){ startY = null; return; }
     clearTimeout(hideT);
     if (stage.classList.contains('hide-ctl')) showCtl(!playing); else stage.classList.add('hide-ctl');
   }
@@ -745,8 +750,7 @@ function vBegin(){
 }
 function vEnd(msg, bad){
   const was = vOn; vOn = false; $('mic').classList.remove('on'); markSaid();
-  clearInterval(srGuard); srRun = false;
-  if (SR){ const r = SR; SR = null; try{ r.onend = null; r.abort ? r.abort() : r.stop(); }catch(_){} }
+  clearInterval(srGuard); if (typeof srKill === 'function') srKill(); srState = 'off';
   try{ if (DICT && DICT.active()) DICT.stop().catch(() => {}); }catch(_){}
   if (was || msg) vStatus(msg || '', bad);
 }
@@ -776,38 +780,52 @@ function micTap(){
 }
 /* Chrome na Androidu sam gasi slušanje nakon tišine ili par rečenica -> svaki put NOVO slušanje (stari objekt zna zapeti),
    a čuvar svake sekunde provjeri radi li; ako ne, upali ga ponovno. */
-let SRC = null, srRun = false, srDown = 0, srGuard = 0, srFatal = false;
+/* Chrome na Androidu sam gasi slušanje (tišina, vrijeme). Pravila ponovnog paljenja:
+   - nikad dva slušanja odjednom (staro se prvo prekine, novo tek kad je staro gotovo)
+   - „zauzet"/„prekinut"/„nema govora" nisu kraj – samo se pokuša ponovno
+   - ako 4 puta zaredom ne uspije (ili mobitel traži dodir), piše „dodirni ekran" i dodir ga ponovno upali */
+let SRC = null, srState = 'off', srT0 = 0, srDown = 0, srGuard = 0, srFatal = false, srNeedTap = false, srFails = 0, srEver = false, srErr = '';
 function srMake(){
   const r = new SRC(); r.lang = 'hr-HR'; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
-  r.onresult = ev => { if (r !== SR) return;
+  r.onresult = ev => { if (r !== SR) return; srFails = 0;
     let t = ''; for (let i = 0; i < ev.results.length; i++) t += ' ' + ev.results[i][0].transcript;
     srText = t; const all = FIN.concat(toks(t)).slice(-14); showHeard(all); align(all); };
-  r.onerror = ev => { if (r !== SR) return;
-    if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed'){ srFatal = true; vEnd('Mikrofon nije dopušten – u Chromeu dopusti mikrofon za ovu stranicu', true); }
-    else if (ev.error === 'network') vStatus('Nema interneta – prepoznavanje govora treba internet', true);
-    else if (ev.error === 'audio-capture'){ srFatal = true; vEnd('Mikrofon zauzet ili nedostupan', true); } };
-  r.onstart = () => { if (r !== SR) return; srRun = true; if (vOn && !/^Čujem/.test($('vst').textContent)) vStatus('Slušam – govori'); };
-  r.onend = () => { if (r !== SR) return; srRun = false; srDown = Date.now();
+  r.onerror = ev => { if (r !== SR) return; srErr = ev.error || '';
+    if (srErr === 'not-allowed' || srErr === 'service-not-allowed'){
+      if (!srEver){ srFatal = true; vEnd('Mikrofon nije dopušten – u Chromeu dopusti mikrofon za ovu stranicu', true); }
+      else { srNeedTap = true; vStatus('Mikrofon je stao – dodirni ekran za nastavak', true); }
+    }
+    else if (srErr === 'network') vStatus('Nema interneta – prepoznavanje govora treba internet', true); };
+  r.onstart = () => { if (r !== SR) return; srState = 'on'; srEver = true; srNeedTap = false;
+    if (vOn && !/^Čujem/.test($('vst').textContent)) vStatus('Slušam – govori'); };
+  r.onend = () => { if (r !== SR) return; srState = 'off'; srDown = Date.now();
     FIN = FIN.concat(toks(srText)).slice(-30); srText = '';
-    if (vOn && !srFatal) setTimeout(srRestart, 150); };
+    if (vOn && !srFatal && !srNeedTap) setTimeout(srRestart, 100); };
   return r;
 }
-window.__pv = () => ({vCur, vMiss, srRun, vOn, n: WORDS.length});   /* za provjeru */
-function srRestart(){
-  if (!vOn || srRun || srFatal) return;
-  try{ SR = srMake(); SR.start(); }catch(_){}
+window.__pv = () => ({vCur, vMiss, srState, srFails, srErr, vOn, n: WORDS.length});   /* za provjeru */
+function srKill(){ if (!SR) return; const r = SR; SR = null; try{ r.onresult = r.onerror = r.onstart = r.onend = null; r.abort ? r.abort() : r.stop(); }catch(_){} }
+function srRestart(force){
+  if (!vOn || srFatal || (!force && srNeedTap) || srState !== 'off') return;
+  srKill(); SR = srMake(); srState = 'starting'; srT0 = Date.now();
+  try{ SR.start(); }catch(e){ srState = 'off'; srDown = Date.now(); srErr = e && e.name || 'start'; srFails++; }
 }
 function srStart(C){
   try{
-    SRC = C; srFatal = false; srRun = false; vMiss = 0;
-    SR = srMake(); vBegin(); SR.start();
+    SRC = C; srFatal = false; srNeedTap = false; srFails = 0; srEver = false; srState = 'off'; vMiss = 0;
+    vBegin(); srRestart(true);
     clearInterval(srGuard);
     srGuard = setInterval(() => {
       if (!vOn){ clearInterval(srGuard); return; }
-      if (!srRun && Date.now() - srDown > 1500){ srDown = Date.now(); srRestart(); }
-    }, 1000);
+      const now = Date.now();
+      if (srState === 'starting' && now - srT0 > 2500){ srKill(); srState = 'off'; srDown = now; srFails++; }   // zapelo pri paljenju
+      if (srFails >= 4 && !srNeedTap){ srNeedTap = true; vStatus('Mikrofon je stao – dodirni ekran za nastavak' + (srErr ? ' (' + srErr + ')' : ''), true); }
+      if (srState === 'off' && !srNeedTap && now - srDown > 400) srRestart();
+    }, 500);
   }catch(e){ vEnd('Slušanje ovdje nije dostupno', true); }
 }
+/* dodir ekrana dok mikrofon stoji = ponovno ga upali (dodir dopušta mobitelu paliti mikrofon) */
+function srTapWake(){ if (vOn && SRC && srState !== 'on'){ srNeedTap = false; srFails = 0; srState = 'off'; srRestart(true); vStatus('Palim mikrofon…'); return true; } return false; }
 on('mic', micTap);
 /* cijeli ekran: dodir = uđi / izađi */
 const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
