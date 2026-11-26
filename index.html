@@ -154,7 +154,7 @@ textarea{width:100%;min-height:42vh;resize:vertical;background:var(--panel);bord
   <div class="wrap">
     <header>
       <h1><span class="tally"></span>Moj prompter</h1>
-      <div class="est"><span id="est"></span><span class="ver">verzija 27.11. (27)</span></div>
+      <div class="est"><span id="est"></span><span class="ver">verzija 27.11. (28)</span></div>
     </header>
 
     <section>
@@ -750,7 +750,7 @@ function vLoop(t){
      dok mikrofon čuje glas (ako ga smijemo slušati), inače još najviše 3 s */
   if (gHitT){
     const now = performance.now(), gap = now - gHitT;
-    const speaking = gVadOn ? (now - vadLast < 500) : gap < 3500;
+    const speaking = gVadOn ? (now - vadLast < 500) : gap < 4000;
     if (gap > 900 && speaking){ vTarget = Math.min(maxPos, vTarget + (gPps || pps()) * dt * slowF()); gCoast = true; }
   }
   const d = vTarget - pos;
@@ -880,14 +880,14 @@ function srStart(C){
   try{
     SRC = C; srFatal = false; srNeedTap = false; srFails = 0; srEver = false; srCont = true; srDeaf = 0; srState = 'off'; vMiss = 0;
     vBegin(); srRestart(true); gHitT = 0; gPps = 0; gCoast = false;
-    setTimeout(() => { if (vOn && !aMode) gVadStart(); }, 2000);
+    /* NE palimo drugi mikrofon: na Androidu tada Chrome ne čuje ništa (27.11.) */
     clearInterval(srGuard);
     srGuard = setInterval(() => {
       if (!vOn){ clearInterval(srGuard); return; }
       const now = Date.now();
       const pn = performance.now(), talking = gVadOn && pn - vadLast < 500, quiet = gVadOn && pn - vadLast > 350;
       /* „gluho": radi, a ne šalje riječi – 2,5 s dok mikrofon čuje da govoriš (ili 5 s) -> novo slušanje */
-      if (srState === 'on' && (now - srLast > 5000 || (talking && now - srLast > 2500))){
+      if (srState === 'on' && (now - srLast > 4000 || (talking && now - srLast > 2500))){
         srKill(); srState = 'off'; srDown = 0; if (++srDeaf >= 2 && srCont) srCont = false;   // 2× gluho -> kraće slušanje (pouzdanije na Androidu)
       }
       /* osvježi slušanje prije nego ga Chrome sam ugasi: nakon 40 s, u kratkoj stanci između rečenica */
