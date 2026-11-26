@@ -150,7 +150,7 @@ textarea{width:100%;min-height:42vh;resize:vertical;background:var(--panel);bord
   <div class="wrap">
     <header>
       <h1><span class="tally"></span>Moj prompter</h1>
-      <div class="est"><span id="est"></span><span class="ver">verzija 26.11. (17)</span></div>
+      <div class="est"><span id="est"></span><span class="ver">verzija 26.11. (18)</span></div>
     </header>
 
     <section>
@@ -560,7 +560,7 @@ function showCtl(stay){ stage.classList.remove('hide-ctl'); clearTimeout(hideT);
 function flashCtl(){ showCtl(false); }
 
 async function lockWake(){ try{ if ('wakeLock' in navigator) wake = await navigator.wakeLock.request('screen'); }catch(e){ wake = null; } }
-document.addEventListener('visibilitychange', () => { if (!stage.hidden && document.visibilityState === 'visible') lockWake(); });
+document.addEventListener('visibilitychange', () => { if (!stage.hidden && document.visibilityState === 'visible'){ lockWake(); if (typeof srRestart === 'function' && SRC) setTimeout(srRestart, 300); } });
 
 function enter(){
   curT().body = ta.value; saveLib(true);
@@ -673,9 +673,11 @@ function heard(text, fin){
   if (fin){ FIN = FIN.concat(w).slice(-30); PART = []; } else PART = w;
   const all = FIN.concat(PART); showHeard(all); align(all);
 }
+let vMiss = 0;
 function align(all){
   const Sp = all.slice(-7); if (!Sp.length || !WORDS.length) return;
-  const lo = Math.max(0, vCur - 3), hi = Math.min(WORDS.length - 1, vCur + 50);
+  const lost = vMiss >= 5;            // 5 puta zaredom nije našao -> traži u cijelom tekstu (npr. preskočen dio)
+  const lo = lost ? 0 : Math.max(0, vCur - 3), hi = lost ? WORDS.length - 1 : Math.min(WORDS.length - 1, vCur + 50);
   let best = -1, bs = 0;
   for (let j = lo; j <= hi; j++){
     /* sidro = zadnja ili predzadnja izgovorena riječ (zadnja zna biti krivo prepoznata ili spojena/rastavljena) */
@@ -691,8 +693,9 @@ function align(all){
       if (adj > bs){ bs = adj; best = j; }
     }
   }
-  const need = (best > vCur && best - vCur <= 4) ? 1.5 : 2.4;
-  if (best >= 0 && bs >= need && best !== vCur){ vCur = best; vTarget = wordY(best); vKick(); markSaid(); }
+  const need = lost ? 3.2 : (best > vCur && best - vCur <= 4) ? 1.5 : 2.4;
+  if (best >= 0 && bs >= need){ vMiss = 0; if (best !== vCur){ vCur = best; vTarget = wordY(best); vKick(); markSaid(); } }
+  else if (Sp.length >= 4) vMiss++;
 }
 function vLoop(t){
   if (!vOn){ vRaf = 0; return; }
@@ -724,7 +727,8 @@ function vBegin(){
 }
 function vEnd(msg, bad){
   const was = vOn; vOn = false; $('mic').classList.remove('on'); markSaid();
-  if (SR){ try{ SR.onend = null; SR.stop(); }catch(_){} SR = null; }
+  clearInterval(srGuard); srRun = false;
+  if (SR){ const r = SR; SR = null; try{ r.onend = null; r.abort ? r.abort() : r.stop(); }catch(_){} }
   try{ if (DICT && DICT.active()) DICT.stop().catch(() => {}); }catch(_){}
   if (was || msg) vStatus(msg || '', bad);
 }
@@ -752,19 +756,38 @@ function micTap(){
   }
   vStatus('Slušanje radi u Chromeu – otvori prompter u Chromeu', true);
 }
+/* Chrome na Androidu sam gasi slušanje nakon tišine ili par rečenica -> svaki put NOVO slušanje (stari objekt zna zapeti),
+   a čuvar svake sekunde provjeri radi li; ako ne, upali ga ponovno. */
+let SRC = null, srRun = false, srDown = 0, srGuard = 0, srFatal = false;
+function srMake(){
+  const r = new SRC(); r.lang = 'hr-HR'; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
+  r.onresult = ev => { if (r !== SR) return;
+    let t = ''; for (let i = 0; i < ev.results.length; i++) t += ' ' + ev.results[i][0].transcript;
+    srText = t; const all = FIN.concat(toks(t)).slice(-14); showHeard(all); align(all); };
+  r.onerror = ev => { if (r !== SR) return;
+    if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed'){ srFatal = true; vEnd('Mikrofon nije dopušten – u Chromeu dopusti mikrofon za ovu stranicu', true); }
+    else if (ev.error === 'network') vStatus('Nema interneta – prepoznavanje govora treba internet', true);
+    else if (ev.error === 'audio-capture'){ srFatal = true; vEnd('Mikrofon zauzet ili nedostupan', true); } };
+  r.onstart = () => { if (r !== SR) return; srRun = true; if (vOn && !/^Čujem/.test($('vst').textContent)) vStatus('Slušam – govori'); };
+  r.onend = () => { if (r !== SR) return; srRun = false; srDown = Date.now();
+    FIN = FIN.concat(toks(srText)).slice(-30); srText = '';
+    if (vOn && !srFatal) setTimeout(srRestart, 150); };
+  return r;
+}
+window.__pv = () => ({vCur, vMiss, srRun, vOn, n: WORDS.length});   /* za provjeru */
+function srRestart(){
+  if (!vOn || srRun || srFatal) return;
+  try{ SR = srMake(); SR.start(); }catch(_){}
+}
 function srStart(C){
   try{
-    SR = new C(); SR.lang = 'hr-HR'; SR.continuous = true; SR.interimResults = true; SR.maxAlternatives = 1;
-    SR.onresult = ev => {
-      let t = ''; for (let i = 0; i < ev.results.length; i++) t += ' ' + ev.results[i][0].transcript;
-      srText = t; const all = FIN.concat(toks(t)).slice(-14); showHeard(all); align(all);
-    };
-    SR.onerror = ev => { if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') vEnd('Mikrofon nije dopušten – u Chromeu dopusti mikrofon za ovu stranicu', true);
-      else if (ev.error === 'network') vStatus('Nema interneta – prepoznavanje govora treba internet', true); };
-    SR.onstart = () => { if (vOn) vStatus('Slušam – govori'); };
-    SR.onend = () => { FIN = FIN.concat(toks(srText)).slice(-30); srText = '';
-      if (vOn && SR){ setTimeout(() => { if (vOn && SR){ try{ SR.start(); }catch(_){} } }, 120); } };
-    vBegin(); SR.start();
+    SRC = C; srFatal = false; srRun = false; vMiss = 0;
+    SR = srMake(); vBegin(); SR.start();
+    clearInterval(srGuard);
+    srGuard = setInterval(() => {
+      if (!vOn){ clearInterval(srGuard); return; }
+      if (!srRun && Date.now() - srDown > 1500){ srDown = Date.now(); srRestart(); }
+    }, 1000);
   }catch(e){ vEnd('Slušanje ovdje nije dostupno', true); }
 }
 on('mic', micTap);
