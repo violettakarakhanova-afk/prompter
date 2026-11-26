@@ -150,7 +150,7 @@ textarea{width:100%;min-height:42vh;resize:vertical;background:var(--panel);bord
   <div class="wrap">
     <header>
       <h1><span class="tally"></span>Moj prompter</h1>
-      <div class="est"><span id="est"></span><span class="ver">verzija 26.11. (15)</span></div>
+      <div class="est"><span id="est"></span><span class="ver">verzija 26.11. (17)</span></div>
     </header>
 
     <section>
@@ -259,6 +259,7 @@ textarea{width:100%;min-height:42vh;resize:vertical;background:var(--panel);bord
     <button class="cb" id="fs" type="button" aria-label="Cijeli ekran" title="Cijeli ekran">
       <svg viewBox="0 0 24 24" id="ic-fs"><path d="M4 4h6v2H6v4H4zm10 0h6v6h-2V6h-4zM4 14h2v4h4v2H4zm14 0h2v6h-6v-2h4z"/></svg>
       <svg viewBox="0 0 24 24" id="ic-fsx" hidden><path d="M8 4h2v6H4V8h4zm6 0h2v4h4v2h-6zM4 14h6v6H8v-4H4zm10 0h6v2h-4v4h-2z"/></svg></button>
+    <button class="cb" id="rot" type="button" aria-label="Okreni ekran">↻ Vodoravno</button>
     <button class="cb" id="mir" type="button" aria-label="Zrcalo">Zrcalo</button>
   </div>
 
@@ -781,6 +782,21 @@ function fsTap(){
   }catch(e){ fsFail(); }
 }
 on('fs', fsTap);
+/* okreni ekran: zaključa vodoravno / uspravno (radi i kad je automatsko okretanje na mobitelu isključeno) */
+const ROTMSG = 'Okretanje ovdje nije dopušteno – otvori Prompter s ikone na početnom zaslonu';
+function rotLbl(){ const l = String((screen.orientation || {}).type || '').startsWith('landscape'); $('rot').textContent = l ? '↻ Uspravno' : '↻ Vodoravno'; }
+function rotTap(){
+  const so = screen.orientation; if (!so || !so.lock){ vStatus(ROTMSG, true); return; }
+  const want = String(so.type || '').startsWith('landscape') ? 'portrait' : 'landscape';
+  so.lock(want).then(rotLbl).catch(() => {
+    const d = document.documentElement, rf = d.requestFullscreen || d.webkitRequestFullscreen;
+    if (!fsEl() && rf){ try{ const r = rf.call(d); (r && r.then ? r : Promise.resolve()).then(() => so.lock(want)).catch(() => { vStatus(ROTMSG, true); setTimeout(() => { if ($('vst').textContent === ROTMSG) vStatus(''); }, 7000); }); }catch(_){ vStatus(ROTMSG, true); } }
+    else { vStatus(ROTMSG, true); setTimeout(() => { if ($('vst').textContent === ROTMSG) vStatus(''); }, 7000); }
+  });
+}
+on('rot', rotTap);
+if (screen.orientation) screen.orientation.addEventListener('change', () => { rotLbl(); if (!stage.hidden) setTimeout(() => layout(true), 150); });
+rotLbl();
 document.addEventListener('fullscreenchange', () => { fsIcon(); if (!stage.hidden) layout(true); });
 document.addEventListener('webkitfullscreenchange', fsIcon);
 window.addEventListener('resize', () => { if (!stage.hidden) layout(true); });
