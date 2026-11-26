@@ -150,7 +150,7 @@ textarea{width:100%;min-height:42vh;resize:vertical;background:var(--panel);bord
   <div class="wrap">
     <header>
       <h1><span class="tally"></span>Moj prompter</h1>
-      <div class="est"><span id="est"></span><span class="ver">verzija 26.11. (18)</span></div>
+      <div class="est"><span id="est"></span><span class="ver">verzija 26.11. (19)</span></div>
     </header>
 
     <section>
@@ -464,6 +464,7 @@ function renderText(){
   }
   textEl.innerHTML = out || '<div class="ln">(Nema teksta – vrati se i upiši ga.)</div>';
   WORDS = [...textEl.querySelectorAll('.w')].map(el => ({n: normW(el.textContent), el}));
+  WORDS.forEach(w => { if (/^\d{1,12}$/.test(w.n)) w.n = numWords(w.n)[0]; });
 }
 /* svaka riječ u svom <span class="w"> – da glas zna gdje je koja riječ */
 function wordsHTML(s){ return s.split(/(\s+)/).map(t => (!t || /^\s+$/.test(t)) ? t : '<span class="w">' + esc(t) + '</span>').join(''); }
@@ -656,7 +657,24 @@ try{ if (window.claude && claude.use) claude.use('dictation').then(d => { if (!d
 let WORDS = [];
 let vOn = false, vCur = -1, vTarget = 0, vRaf = 0, vLast = 0, FIN = [], PART = [], SR = null, vNoLang = false;
 function normW(s){ return s.toLowerCase().replace(/đ/g, 'd').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ''); }
-function toks(s){ return String(s || '').split(/\s+/).map(normW).filter(Boolean); }
+function toks(s){
+  return String(s || '').replace(/(\d)[.,](?=\d{3}\b)/g, '$1').replace(/€/g, ' eura ').replace(/%/g, ' posto ')
+    .split(/\s+/).flatMap(numWords).map(normW).filter(Boolean);
+}
+/* broj iz govora -> hrvatske riječi kako stoje u tekstu (5000000 -> pet milijuna, 40 -> cetrdeset) */
+const NJ = ['nula','jedan','dva','tri','cetiri','pet','sest','sedam','osam','devet','deset','jedanaest','dvanaest','trinaest','cetrnaest','petnaest','sesnaest','sedamnaest','osamnaest','devetnaest'];
+const ND = ['','','dvadeset','trideset','cetrdeset','pedeset','sezdeset','sedamdeset','osamdeset','devedeset'];
+const NS = ['','sto','dvjesto','tristo','cetiristo','petsto','sesto','sedamsto','osamsto','devetsto'];
+function n999(n){ const o = []; if (n >= 100){ o.push(NS[Math.floor(n / 100)]); n %= 100; } if (n >= 20){ o.push(ND[Math.floor(n / 10)]); n %= 10; if (n) o.push(NJ[n]); } else if (n || !o.length) o.push(NJ[n]); return o; }
+function numWords(t){
+  if (!/^\d{1,12}$/.test(t)) return [t];
+  let n = parseInt(t, 10); if (n === 0) return ['nula'];
+  const o = [], mil = Math.floor(n / 1e6), tis = Math.floor(n / 1000) % 1000, r = n % 1000;
+  if (mil) o.push(...(mil === 1 ? ['jedan'] : n999(mil)), mil === 1 ? 'milijun' : 'milijuna');
+  if (tis) o.push(...(tis === 1 ? [] : n999(tis)), 'tisuca');
+  if (r) o.push(...n999(r));
+  return o.length ? o : [t];
+}
 /* sličnost dviju riječi: ista = 1 (kratke 0,5), isti korijen (prva 4 slova, hrvatski padeži) = 0,8 */
 function sim(a, b){
   if (!a || !b) return 0;
@@ -681,7 +699,7 @@ function align(all){
   let best = -1, bs = 0;
   for (let j = lo; j <= hi; j++){
     /* sidro = zadnja ili predzadnja izgovorena riječ (zadnja zna biti krivo prepoznata ili spojena/rastavljena) */
-    for (let a = Sp.length - 1; a >= Math.max(0, Sp.length - 2); a--){
+    for (let a = Sp.length - 1; a >= Math.max(0, Sp.length - 3); a--){
       let e = sim(Sp[a], WORDS[j].n);
       if (!e && a > 0) e = sim(Sp[a - 1] + Sp[a], WORDS[j].n) * 0.9;     // „pre rizična" = „prerizična"
       if (!e) continue;
@@ -689,7 +707,7 @@ function align(all){
       for (let i = a - 1; i >= 0 && p >= 0 && p >= j - 12; i--){
         for (let q = p; q >= Math.max(0, p - 2); q--){ const v = sim(Sp[i], WORDS[q].n); if (v){ sc += v; p = q - 1; break; } }
       }
-      const adj = sc - Math.abs(j - (vCur + 1)) * 0.02;
+      const adj = sc - Math.abs(j - (vCur + 1)) * (lost ? 0.0005 : 0.02);   // izgubljen: udaljenost skoro ne kažnjava
       if (adj > bs){ bs = adj; best = j; }
     }
   }
